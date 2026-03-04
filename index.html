@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UDONGGOL SEASON 6</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & Babel for in-browser JSX support -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100;300;400;500;700;900&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- Firebase Configuration (환경 변수가 없을 경우 대비한 기본값) ---
+        const firebaseConfig = (typeof __firebase_config !== 'undefined') 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "",
+                authDomain: "",
+                projectId: "",
+                storageBucket: "",
+                messagingSenderId: "",
+                appId: ""
+            };
+
+        /**
+         * Lucide Icon Wrapper Component
+         * 라이브러리 로드 후 DOM에 직접 아이콘을 주입하는 안전한 방식입니다.
+         */
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const iconRef = useRef(null);
+
+            useEffect(() => {
+                if (window.lucide && iconRef.current) {
+                    iconRef.current.innerHTML = '';
+                    const iconElement = document.createElement('i');
+                    // Lucide 아이콘 이름을 kebab-case로 변환
+                    const formattedName = name.toLowerCase().replace(/([a-z0-9])([A-Z])/g, '$1-$2');
+                    iconElement.setAttribute('data-lucide', formattedName);
+                    iconElement.style.width = `${size}px`;
+                    iconElement.style.height = `${size}px`;
+                    if (className) iconElement.className = className;
+                    iconRef.current.appendChild(iconElement);
+                    
+                    window.lucide.createIcons({
+                        attrs: {
+                            strokeWidth: 2,
+                            width: size,
+                            height: size
+                        }
+                    });
+                }
+            }, [name, size, className]);
+
+            return <span ref={iconRef} className={`inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}></span>;
+        };
+
+        const PLAYER_NAMES = ["영빈", "밤또", "낭빠", "비락", "벙커", "찐", "늘보", "호이서", "고들빠", "윤샷", "뒤땅", "버디풋", "곰둘", "버디레몬", "뚱", "쑤기", "세리", "심짱", "팔오", "꽝조이", "소하짱", "찰리심", "김부장", "뽀주니", "쭈니", "홍이", "우기", "하트", "털이", "최딩딩", "타이틀", "모키", "정종하", "아띠", "로드짱", "김대표", "최본말", "으랏챠", "토니", "쇼군", "입프로", "함또"];
+
+        function App() {
+            const [view, setView] = useState('home');
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [players, setPlayers] = useState(PLAYER_NAMES.map((name, i) => ({ id: i, name, team: null })));
+            const [supports, setSupports] = useState([]);
+            const [showAdminModal, setShowAdminModal] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+
+            const dDay = useMemo(() => {
+                const target = new Date('2025-03-29');
+                const now = new Date();
+                const diff = target.getTime() - now.getTime();
+                return Math.ceil(diff / (1000 * 60 * 60 * 24));
+            }, []);
+
+            const handleAdminLogin = () => {
+                if (adminPassword === '0101' || adminPassword === '0202') {
+                    setIsAdmin(true);
+                    setShowAdminModal(false);
+                    setAdminPassword('');
+                } else {
+                    // alert 대신 커스텀 메시지를 사용하는 것이 좋지만, 
+                    // 여기서는 간단한 로직 확인용으로 두었습니다.
+                }
+            };
+
+            const assignTeam = (id, team) => {
+                setPlayers(prev => prev.map(p => p.id === id ? { ...p, team } : p));
+            };
+
+            return (
+                <div className="min-h-screen pb-24 md:pb-0 md:pl-20">
+                    {/* Navigation */}
+                    <nav className="fixed bottom-0 left-0 w-full md:w-20 md:h-full bg-white/90 backdrop-blur-md border-t md:border-t-0 md:border-r border-slate-200 z-50 flex md:flex-col items-center justify-around md:justify-center gap-8 p-4">
+                        <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 transition-all ${view === 'home' ? 'text-green-600 scale-110' : 'text-slate-400'}`}>
+                            <Icon name="Home" />
+                            <span className="text-[10px] font-black uppercase">Home</span>
+                        </button>
+                        <button onClick={() => setView('draft')} className={`flex flex-col items-center gap-1 transition-all ${view === 'draft' ? 'text-green-600 scale-110' : 'text-slate-400'}`}>
+                            <Icon name="Users" />
+                            <span className="text-[10px] font-black uppercase">Draft</span>
+                        </button>
+                        <button onClick={() => setView('hall')} className={`flex flex-col items-center gap-1 transition-all ${view === 'hall' ? 'text-green-600 scale-110' : 'text-slate-400'}`}>
+                            <Icon name="Trophy" />
+                            <span className="text-[10px] font-black uppercase">Hall</span>
+                        </button>
+                        <button onClick={() => isAdmin ? setIsAdmin(false) : setShowAdminModal(true)} className={`p-2.5 rounded-xl transition-all ${isAdmin ? 'bg-green-600 text-white shadow-lg shadow-green-200' : 'bg-slate-100 text-slate-400'}`}>
+                            <Icon name="ShieldCheck" size={20} />
+                        </button>
+                    </nav>
+
+                    <main className="max-w-6xl mx-auto p-6 md:p-12">
+                        {view === 'home' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                <header className="mb-12">
+                                    <h1 className="text-5xl md:text-8xl font-black italic tracking-tighter mb-4 leading-none uppercase text-slate-900">
+                                        UDONGGOL<br/><span className="text-green-600">SEASON 6</span>
+                                    </h1>
+                                    <div className="flex flex-wrap gap-4">
+                                        <span className="bg-slate-900 text-white px-5 py-2 rounded-full text-xs font-black uppercase italic flex items-center gap-2 shadow-lg shadow-slate-200">
+                                            <Icon name="Calendar" size={14} /> D-{dDay > 0 ? dDay : (dDay === 0 ? 'DAY' : 'END')}
+                                        </span>
+                                        <span className="bg-green-100 text-green-700 px-5 py-2 rounded-full text-xs font-black uppercase italic flex items-center gap-2">
+                                            <Icon name="MapPin" size={14} /> 2025. 03. 29 (SAT)
+                                        </span>
+                                    </div>
+                                </header>
+
+                                <div className="bg-orange-50 border-2 border-orange-100 rounded-[40px] p-8 mb-10 flex flex-col md:flex-row items-center gap-8 shadow-sm">
+                                    <div className="bg-orange-500 text-white p-5 rounded-[24px] shadow-lg shadow-orange-200 animate-pulse">
+                                        <Icon name="Utensils" size={40} />
+                                    </div>
+                                    <div className="flex-grow">
+                                        <h4 className="text-orange-900 font-black text-xl mb-2 italic uppercase flex items-center gap-2">Lunch Notice <span className="bg-orange-200 text-orange-700 text-[10px] px-2 py-0.5 rounded-full uppercase">11:00 AM</span></h4>
+                                        <p className="text-orange-700 font-bold text-lg leading-snug">대회 전 식당에서 단체 식사를 진행합니다. 시간을 엄수해 주세요!</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {[
+                                        { icon: "Clock", label: 'Schedule', val: `11:00 식사 / 13:10 티업`, color: 'text-green-600', bg: 'bg-green-50' },
+                                        { icon: "MapPin", label: 'Venue', val: "샤인데일 CC", color: 'text-red-500', bg: 'bg-red-50' },
+                                        { icon: "Trophy", label: 'Supporters', val: `현재 ${supports.length}명 참여중`, color: 'text-amber-500', bg: 'bg-amber-50' }
+                                    ].map((card, i) => (
+                                        <div key={i} className="bg-white p-10 rounded-[45px] shadow-xl border border-slate-100 hover:translate-y-[-5px] transition-transform">
+                                            <div className={`${card.bg} ${card.color} w-16 h-16 rounded-3xl flex items-center justify-center mb-6`}>
+                                                <Icon name={card.icon} size={32} />
+                                            </div>
+                                            <h3 className="text-slate-400 text-[10px] font-black uppercase mb-2 tracking-widest">{card.label}</h3>
+                                            <p className="text-2xl font-black italic text-slate-800 leading-tight">{card.val}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'draft' && (
+                            <div className="animate-in fade-in duration-500">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
+                                    <h2 className="text-5xl font-black italic uppercase text-slate-900">Live Selection</h2>
+                                    <div className="flex gap-4 bg-white p-5 rounded-[32px] shadow-xl border border-slate-50">
+                                        <div className="text-center px-6 border-r border-slate-100">
+                                            <p className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-1">Jolam Team</p>
+                                            <p className="text-3xl font-black italic text-slate-800">{players.filter(p=>p.team==='jolam').length}<span className="text-sm font-normal text-slate-400 ml-1">명</span></p>
+                                        </div>
+                                        <div className="text-center px-6">
+                                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Yumki Team</p>
+                                            <p className="text-3xl font-black italic text-slate-800">{players.filter(p=>p.team==='yumki').length}<span className="text-sm font-normal text-slate-400 ml-1">명</span></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <div className="lg:col-span-2 space-y-6">
+                                        <div className="bg-white rounded-[50px] p-10 shadow-xl border border-slate-100">
+                                            <h3 className="text-xs font-black uppercase mb-8 text-slate-400 tracking-[0.3em] flex items-center gap-2 uppercase">
+                                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                                                Wait List ({players.filter(p=>!p.team).length})
+                                            </h3>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                {players.filter(p=>!p.team).map(p => (
+                                                    <div key={p.id} className="bg-slate-50 p-5 rounded-[24px] border border-slate-100 group transition-all">
+                                                        <span className="font-black text-base block mb-3 text-slate-700">{p.name}</span>
+                                                        {isAdmin && (
+                                                            <div className="flex gap-2">
+                                                                <button onClick={() => assignTeam(p.id, 'jolam')} className="flex-1 bg-pink-500 text-white py-2 rounded-xl text-[10px] font-black uppercase shadow-sm">졸람</button>
+                                                                <button onClick={() => assignTeam(p.id, 'yumki')} className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black uppercase shadow-sm">염키</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-6">
+                                        <div className="bg-pink-50 rounded-[40px] p-8 border border-pink-100">
+                                            <h4 className="text-pink-600 font-black text-xs uppercase tracking-widest mb-4 italic">Jolam Lineup</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {players.filter(p=>p.team==='jolam').map(p => (
+                                                    <span key={p.id} className="bg-white px-3 py-1.5 rounded-full text-xs font-bold text-pink-700 border border-pink-100 shadow-sm">{p.name}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="bg-blue-50 rounded-[40px] p-8 border border-blue-100">
+                                            <h4 className="text-blue-600 font-black text-xs uppercase tracking-widest mb-4 italic">Yumki Lineup</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {players.filter(p=>p.team==='yumki').map(p => (
+                                                    <span key={p.id} className="bg-white px-3 py-1.5 rounded-full text-xs font-bold text-blue-700 border border-blue-100 shadow-sm">{p.name}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'hall' && (
+                            <div className="animate-in fade-in duration-500">
+                                <h2 className="text-5xl font-black italic uppercase text-slate-900 leading-tight mb-12">Contribution<br/><span className="text-amber-500">Hall of Fame</span></h2>
+                                <div className="text-center py-24 bg-white rounded-[60px] border-2 border-dashed border-slate-100">
+                                    <Icon name="Star" size={64} className="text-amber-300 mx-auto mb-6" />
+                                    <h3 className="text-2xl font-black italic text-slate-400">COMING SOON</h3>
+                                    <p className="text-slate-300 font-bold mt-2 italic">찬조 및 기부 내역이 곧 업데이트 됩니다.</p>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Admin Modal */}
+                    {showAdminModal && (
+                        <div className="fixed inset-0 bg-slate-900/95 z-[200] flex items-center justify-center p-6 backdrop-blur-md animate-in fade-in zoom-in duration-300">
+                            <div className="bg-white rounded-[50px] w-full max-w-md p-12 text-center shadow-2xl relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-500 via-green-500 to-blue-500"></div>
+                                <h2 className="text-3xl font-black mb-4 italic text-slate-900 uppercase">Admin Access</h2>
+                                <p className="text-slate-400 text-sm font-bold mb-8 tracking-widest uppercase">Enter Secret Key</p>
+                                <input 
+                                    type="password" 
+                                    value={adminPassword} 
+                                    onChange={e => setAdminPassword(e.target.value)} 
+                                    onKeyPress={e => e.key === 'Enter' && handleAdminLogin()}
+                                    className="w-full bg-slate-50 border-4 border-slate-100 rounded-[30px] p-6 text-center text-4xl font-black mb-8 outline-none focus:border-green-500/30 transition-all" 
+                                    placeholder="••••" 
+                                    autoFocus
+                                />
+                                <div className="flex gap-4">
+                                    <button onClick={() => setShowAdminModal(false)} className="flex-1 py-4 font-black text-slate-400">Cancel</button>
+                                    <button onClick={handleAdminLogin} className="flex-2 bg-slate-900 text-white rounded-[24px] font-black px-10 hover:bg-black transition-colors">Login</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
