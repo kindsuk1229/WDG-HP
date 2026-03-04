@@ -4,280 +4,48 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>우동골 시즌 6 - SHINEDALE CC</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Firebase Libraries -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
-        // Firebase 설정
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'udonggol-s6';
-
-        // 상태 관리 변수
-        let currentUser = null;
-        let adminRole = null; 
-        let currentView = 'home';
-        
-        const INITIAL_PLAYERS = ["영빈", "밤또", "낭빠", "비락", "벙커", "찐", "늘보", "호이서", "고들빠", "윤샷", "뒤땅", "버디풋", "곰둘", "버디레몬", "뚱", "쑤기", "세리", "심짱", "팔오", "꽝조이", "소하짱", "찰리심", "김부장", "뽀주니", "쭈니", "홍이", "우기", "하트", "털이", "최딩딩", "타이틀", "모키", "정종하", "아띠", "로드짱", "김대표", "최본말", "으랏챠", "토니", "쇼군", "입프로", "함또"];
-
-        // UI 업데이트 함수
-        const render = () => {
-            const navLinks = document.querySelectorAll('.nav-link');
-            navLinks.forEach(link => {
-                if(link.dataset.view === currentView) {
-                    link.classList.add('text-green-600');
-                    link.classList.remove('text-slate-300');
-                } else {
-                    link.classList.remove('text-green-600');
-                    link.classList.add('text-slate-300');
-                }
-            });
-
-            document.querySelectorAll('.view-section').forEach(s => s.classList.add('hidden'));
-            document.getElementById(`view-${currentView}`).classList.remove('hidden');
-            
-            document.querySelectorAll('.admin-only').forEach(el => {
-                el.style.display = adminRole ? 'block' : 'none';
-            });
-            
-            const lockBtn = document.getElementById('lock-btn');
-            if (lockBtn) {
-                lockBtn.innerHTML = adminRole ? '<i data-lucide="unlock"></i>' : '<i data-lucide="lock"></i>';
-            }
-            lucide.createIcons();
-        };
-
-        // 데이터 동기화 리스너 (인증 후 호출됨)
-        const initSync = () => {
-            if (!auth.currentUser) return;
-
-            const errorCallback = (error) => console.error("Firestore Error:", error);
-
-            // 1. 공지사항
-            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), (snap) => {
-                const data = snap.exists() ? snap.data() : { text: "11:00 식사 후 13:10부터 티오프 진행합니다." };
-                document.getElementById('notice-text').innerText = data.text;
-                document.getElementById('notice-input').value = data.text;
-            }, errorCallback);
-
-            // 2. 선수 명단
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (snap) => {
-                const players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                updateDraftBoard(players);
-            }, errorCallback);
-
-            // 3. 명예의 전당
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'hall'), (snap) => {
-                const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                updateHallOfFame(items);
-            }, errorCallback);
-
-            // 4. 채팅
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), (snap) => {
-                const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.timestamp - b.timestamp);
-                updateChat(msgs.slice(-30));
-            }, errorCallback);
-        };
-
-        const updateDraftBoard = (players) => {
-            const jolamList = document.getElementById('jolam-list');
-            const yumkiList = document.getElementById('yumki-list');
-            const poolList = document.getElementById('pool-list');
-            if (!jolamList || !yumkiList || !poolList) return;
-
-            let jolamH = 0, yumkiH = 0;
-            let jolamC = 0, yumkiC = 0, poolC = 0;
-
-            [jolamList, yumkiList, poolList].forEach(el => el.innerHTML = '');
-
-            players.sort((a,b) => (a.handicap || 0) - (b.handicap || 0) || a.name.localeCompare(b.name)).forEach(p => {
-                const card = document.createElement('div');
-                card.className = `p-2 rounded-xl border mb-2 ${p.team === 'jolam' ? 'bg-pink-50 border-pink-200' : p.team === 'yumki' ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 shadow-sm'}`;
-                
-                let adminControls = '';
-                if(adminRole) {
-                    adminControls = `
-                        <div class="mt-2 flex gap-1">
-                            ${!p.team ? `
-                                <button onclick="window.setTeam('${p.id}', 'jolam')" class="flex-1 bg-pink-500 text-white text-[9px] py-1 rounded font-bold">조람</button>
-                                <button onclick="window.setTeam('${p.id}', 'yumki')" class="flex-1 bg-blue-600 text-white text-[9px] py-1 rounded font-bold">염기</button>
-                            ` : `
-                                <button onclick="window.setTeam('${p.id}', null)" class="w-full bg-slate-200 text-slate-600 text-[9px] py-1 rounded font-bold">해제</button>
-                            `}
-                        </div>
-                        <input type="number" class="w-full mt-1 text-[9px] border rounded px-1" placeholder="H." onblur="window.setHcap('${p.id}', this.value)" value="${p.handicap || 0}">
-                    `;
-                }
-
-                card.innerHTML = `
-                    <div class="flex justify-between items-center">
-                        <span class="font-black text-xs text-slate-800">${p.name}</span>
-                        <span class="text-[8px] font-black bg-slate-100 px-1 py-0.5 rounded text-slate-400">H.${p.handicap || 0}</span>
-                    </div>
-                    ${adminControls}
-                `;
-
-                if(p.team === 'jolam') { jolamList.appendChild(card); jolamH += (p.handicap || 0); jolamC++; }
-                else if(p.team === 'yumki') { yumkiList.appendChild(card); yumkiH += (p.handicap || 0); yumkiC++; }
-                else { poolList.appendChild(card); poolC++; }
-            });
-
-            document.getElementById('jolam-hcap').innerText = jolamH;
-            document.getElementById('yumki-hcap').innerText = yumkiH;
-            document.getElementById('jolam-count').innerText = jolamC;
-            document.getElementById('yumki-count').innerText = yumkiC;
-            document.getElementById('pool-count').innerText = poolC;
-        };
-
-        const updateHallOfFame = (items) => {
-            const cashList = document.getElementById('hall-cash-list');
-            const itemList = document.getElementById('hall-item-list');
-            if (!cashList || !itemList) return;
-            cashList.innerHTML = ''; itemList.innerHTML = '';
-            
-            let totalCash = 0;
-            items.forEach(h => {
-                const el = document.createElement('div');
-                el.className = "bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center mb-2 shadow-sm";
-                
-                if(h.type === 'cash') {
-                    totalCash += Number(h.amount);
-                    el.innerHTML = `
-                        <span class="font-bold text-slate-800 text-sm">${h.name}</span>
-                        <span class="font-black text-amber-600">${Number(h.amount).toLocaleString()}원</span>
-                    `;
-                    cashList.appendChild(el);
-                } else {
-                    el.innerHTML = `
-                        <div>
-                            <div class="font-bold text-slate-800 text-sm">${h.name}</div>
-                            <div class="text-[9px] font-bold text-slate-400 uppercase">${h.item}</div>
-                        </div>
-                    `;
-                    itemList.appendChild(el);
-                }
-            });
-            document.getElementById('total-cash-display').innerText = totalCash.toLocaleString();
-            document.getElementById('total-item-display').innerText = items.filter(i=>i.type==='item').length;
-        };
-
-        const updateChat = (msgs) => {
-            const chatBox = document.getElementById('chat-messages');
-            if (!chatBox) return;
-            chatBox.innerHTML = '';
-            msgs.forEach(m => {
-                const div = document.createElement('div');
-                div.className = `flex flex-col ${m.uid === currentUser?.uid ? 'items-end' : 'items-start'} mb-2`;
-                div.innerHTML = `
-                    <div class="px-3 py-2 rounded-2xl text-[11px] max-w-[85%] ${m.uid === currentUser?.uid ? 'bg-green-600 text-white' : 'bg-slate-100'}">${m.text}</div>
-                    <span class="text-[8px] font-bold text-slate-400 mt-1">${m.user} · ${m.time}</span>
-                `;
-                chatBox.appendChild(div);
-            });
-            chatBox.scrollTop = chatBox.scrollHeight;
-        };
-
-        // 전역 함수
-        window.changeView = (v) => { currentView = v; render(); };
-        window.setTeam = async (id, team) => { if(!adminRole) return; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { team }); };
-        window.setHcap = async (id, val) => { if(!adminRole) return; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { handicap: Number(val) || 0 }); };
-        window.saveNotice = async () => { 
-            const text = document.getElementById('notice-input').value;
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), { text, lastUpdated: Date.now() });
-            document.getElementById('notice-edit-modal').classList.add('hidden');
-        };
-        window.login = () => {
-            const pw = document.getElementById('admin-pw').value;
-            if(pw === '7777') adminRole = 'MASTER';
-            else if(pw === '0101') adminRole = 'JOLAM';
-            else if(pw === '0202') adminRole = 'YUMKI';
-            else return alert('틀렸습니다.');
-            document.getElementById('admin-modal').classList.add('hidden');
-            render();
-        };
-        window.logout = () => { adminRole = null; render(); };
-        window.openAdmin = () => { if(adminRole) window.logout(); else document.getElementById('admin-modal').classList.remove('hidden'); };
-        window.sendChat = async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('chat-input');
-            if(!input.value.trim() || !currentUser) return;
-            const sender = adminRole ? (adminRole === 'MASTER' ? '운영진' : (adminRole === 'JOLAM' ? '조람단장' : '염기단장')) : '참가자';
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), {
-                text: input.value, user: sender, uid: currentUser.uid, timestamp: Date.now(),
-                time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-            });
-            input.value = '';
-        };
-        window.addHall = async () => {
-            const name = document.getElementById('hall-name').value;
-            const type = document.getElementById('hall-type').value;
-            const amount = document.getElementById('hall-amount').value;
-            const item = document.getElementById('hall-item').value;
-            if(!name) return;
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'hall'), { name, type, amount, item, timestamp: Date.now() });
-            document.getElementById('hall-modal').classList.add('hidden');
-        };
-        window.initPlayers = async () => {
-            if(adminRole !== 'MASTER') return;
-            for(let i=0; i<INITIAL_PLAYERS.length; i++) {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', `p${i}`), { name: INITIAL_PLAYERS[i], team: null, handicap: 0 });
-            }
-        };
-
-        // 초기 구동: RULE 3 준수 (인증 완료 후 Firestore 쿼리 실행)
-        window.onload = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        currentUser = user;
-                        initSync(); // 인증된 상태에서만 리스너 시작
-                        render();
-                    }
-                });
-            } catch (error) {
-                console.error("Auth initialization failed:", error);
-            }
-        };
-    </script>
     <style>
         body { font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .view-section { transition: opacity 0.3s ease; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 pb-20 md:pb-0">
 
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center">
+        <div class="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p class="font-black text-slate-400 text-xs uppercase tracking-widest">Loading UDONGGOL...</p>
+    </div>
+
     <!-- Desktop Sidebar -->
     <nav class="hidden md:flex flex-col w-20 bg-white border-r border-slate-200 items-center py-10 gap-8 fixed h-full z-50">
         <div class="text-green-600 font-black italic text-xl mb-4">UDG</div>
-        <button onclick="changeView('home')" class="nav-link p-3 rounded-2xl" data-view="home"><i data-lucide="home"></i></button>
-        <button onclick="changeView('draft')" class="nav-link p-3 rounded-2xl" data-view="draft"><i data-lucide="users"></i></button>
-        <button onclick="changeView('hall')" class="nav-link p-3 rounded-2xl" data-view="hall"><i data-lucide="trophy"></i></button>
-        <button onclick="openAdmin()" id="lock-btn" class="mt-auto p-3 rounded-2xl bg-slate-100 text-slate-300"></button>
+        <button onclick="changeView('home')" class="nav-link p-3 rounded-2xl text-slate-300" data-view="home"><i data-lucide="home"></i></button>
+        <button onclick="changeView('draft')" class="nav-link p-3 rounded-2xl text-slate-300" data-view="draft"><i data-lucide="users"></i></button>
+        <button onclick="changeView('hall')" class="nav-link p-3 rounded-2xl text-slate-300" data-view="hall"><i data-lucide="trophy"></i></button>
+        <button onclick="openAdmin()" id="lock-btn" class="mt-auto p-3 rounded-2xl bg-slate-100 text-slate-400">
+            <i data-lucide="lock"></i>
+        </button>
     </nav>
 
     <!-- Mobile Bottom Nav -->
     <nav class="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex justify-around py-3 z-50 px-2 shadow-2xl">
-        <button onclick="changeView('home')" class="nav-link flex flex-col items-center flex-1" data-view="home"><i data-lucide="home" size="20"></i><span class="text-[9px] font-bold mt-1">홈</span></button>
-        <button onclick="changeView('draft')" class="nav-link flex flex-col items-center flex-1" data-view="draft"><i data-lucide="users" size="20"></i><span class="text-[9px] font-bold mt-1">드래프트</span></button>
-        <button onclick="changeView('hall')" class="nav-link flex flex-col items-center flex-1" data-view="hall"><i data-lucide="trophy" size="20"></i><span class="text-[9px] font-bold mt-1">명예</span></button>
+        <button onclick="changeView('home')" class="nav-link flex flex-col items-center flex-1 text-slate-300" data-view="home"><i data-lucide="home" size="20"></i><span class="text-[9px] font-bold mt-1">홈</span></button>
+        <button onclick="changeView('draft')" class="nav-link flex flex-col items-center flex-1 text-slate-300" data-view="draft"><i data-lucide="users" size="20"></i><span class="text-[9px] font-bold mt-1">드래프트</span></button>
+        <button onclick="changeView('hall')" class="nav-link flex flex-col items-center flex-1 text-slate-300" data-view="hall"><i data-lucide="trophy" size="20"></i><span class="text-[9px] font-bold mt-1">명예</span></button>
         <button onclick="openAdmin()" class="flex flex-col items-center flex-1 text-slate-300"><i data-lucide="lock" size="20"></i><span class="text-[9px] font-bold mt-1">관리자</span></button>
     </nav>
 
-    <main class="md:ml-20 p-4 md:p-10 max-w-7xl mx-auto">
+    <main id="app-main" class="md:ml-20 p-4 md:p-10 max-w-7xl mx-auto opacity-0 transition-opacity duration-500">
         <!-- Home Section -->
         <section id="view-home" class="view-section space-y-6">
             <header>
@@ -293,7 +61,7 @@
                 <div class="bg-slate-900 rounded-[32px] p-8 text-white min-h-[180px] flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div class="bg-green-500 p-2 rounded-xl"><i data-lucide="megaphone" size="20"></i></div>
-                        <button onclick="document.getElementById('notice-edit-modal').classList.remove('hidden')" class="admin-only text-white/30 hover:text-white transition-colors"><i data-lucide="edit-3" size="18"></i></button>
+                        <button onclick="document.getElementById('notice-edit-modal').classList.remove('hidden')" class="admin-only hidden text-white/30 hover:text-white"><i data-lucide="edit-3" size="18"></i></button>
                     </div>
                     <div>
                         <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Announcement</div>
@@ -304,11 +72,11 @@
                     <div class="grid grid-cols-2 gap-6">
                         <div>
                             <div class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Cash Donation</div>
-                            <div class="text-2xl font-black"><span id="total-cash-display">0</span> <span class="text-xs">원</span></div>
+                            <div class="text-2xl font-black"><span id="total-cash-display">0</span> <span class="text-xs font-normal">원</span></div>
                         </div>
                         <div>
-                            <div class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Sponsored Items</div>
-                            <div class="text-2xl font-black"><span id="total-item-display">0</span> <span class="text-xs">개</span></div>
+                            <div class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Items</div>
+                            <div class="text-2xl font-black"><span id="total-item-display">0</span> <span class="text-xs font-normal">개</span></div>
                         </div>
                     </div>
                     <div class="flex gap-4 pt-4 border-t border-slate-100 text-slate-400 text-[10px] font-bold uppercase italic">
@@ -316,7 +84,7 @@
                     </div>
                 </div>
             </div>
-            <button onclick="initPlayers()" class="admin-only w-full bg-slate-200 text-slate-500 py-3 rounded-xl font-bold text-xs">선수 데이터 초기화 (마스터 전용)</button>
+            <button onclick="initPlayers()" class="admin-only hidden w-full bg-slate-200 text-slate-500 py-3 rounded-xl font-bold text-xs">선수 데이터 초기화 (마스터 전용)</button>
         </section>
 
         <!-- Draft Section -->
@@ -324,14 +92,13 @@
             <header class="flex flex-col sm:flex-row justify-between items-end border-b border-slate-200 pb-6 gap-4">
                 <div>
                     <h2 class="text-3xl font-black italic uppercase tracking-tighter">Draft Board</h2>
-                    <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Real-time Team Selection</p>
                 </div>
                 <div class="flex gap-2 w-full sm:w-auto">
-                    <div class="bg-pink-100 px-3 py-1.5 rounded-xl text-center flex-1 sm:min-w-[100px]">
+                    <div class="bg-pink-100 px-3 py-1.5 rounded-xl text-center flex-1">
                         <div class="text-[8px] font-black text-pink-500 uppercase">Jolam Hcap</div>
                         <div id="jolam-hcap" class="text-lg font-black text-pink-700">0</div>
                     </div>
-                    <div class="bg-blue-100 px-3 py-1.5 rounded-xl text-center flex-1 sm:min-w-[100px]">
+                    <div class="bg-blue-100 px-3 py-1.5 rounded-xl text-center flex-1">
                         <div class="text-[8px] font-black text-blue-500 uppercase">Yumki Hcap</div>
                         <div id="yumki-hcap" class="text-lg font-black text-blue-700">0</div>
                     </div>
@@ -339,7 +106,6 @@
             </header>
 
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <!-- Teams -->
                 <div class="lg:col-span-4 space-y-4">
                     <div class="bg-pink-50/50 rounded-[32px] p-6 border border-pink-100">
                         <h3 class="text-[10px] font-black text-pink-500 uppercase mb-4 flex justify-between">Jolam <span id="jolam-count">0</span></h3>
@@ -350,15 +116,13 @@
                         <div id="yumki-list" class="grid grid-cols-2 gap-2 max-h-[220px] overflow-y-auto scrollbar-hide"></div>
                     </div>
                 </div>
-                <!-- Pool -->
                 <div class="lg:col-span-4 bg-slate-100 rounded-[32px] p-6 border border-slate-200">
                     <h3 class="text-[10px] font-black text-slate-500 uppercase mb-4 flex justify-between tracking-widest">Player Pool <span id="pool-count">0</span></h3>
-                    <div id="pool-list" class="grid grid-cols-2 gap-2 max-h-[500px] overflow-y-auto scrollbar-hide content-start"></div>
+                    <div id="pool-list" class="grid grid-cols-2 gap-2 max-h-[500px] overflow-y-auto scrollbar-hide"></div>
                 </div>
-                <!-- Chat -->
                 <div class="lg:col-span-4 bg-slate-900 rounded-[32px] p-6 text-white h-[500px] lg:h-auto flex flex-col">
-                    <h3 class="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest flex items-center gap-2"><i data-lucide="message-square" size="14"></i> Chat</h3>
-                    <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 mb-4 scrollbar-hide pr-1"></div>
+                    <h3 class="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">Chat</h3>
+                    <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 mb-4 scrollbar-hide"></div>
                     <form onsubmit="sendChat(event)" class="flex gap-2">
                         <input id="chat-input" class="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-[11px] outline-none" placeholder="메시지 입력...">
                         <button class="bg-green-600 p-3 rounded-xl"><i data-lucide="send" size="16"></i></button>
@@ -370,23 +134,12 @@
         <!-- Hall Section -->
         <section id="view-hall" class="view-section hidden space-y-8">
             <header class="flex justify-between items-center border-b border-slate-200 pb-6">
-                <div>
-                    <h2 class="text-3xl font-black italic uppercase tracking-tighter">Hall of Fame</h2>
-                    <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Grateful Supporters</p>
-                </div>
-                <button onclick="document.getElementById('hall-modal').classList.remove('hidden')" class="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase flex items-center gap-2">
-                    <i data-lucide="plus" size="14"></i> 후원 등록
-                </button>
+                <h2 class="text-3xl font-black italic uppercase tracking-tighter">Hall of Fame</h2>
+                <button onclick="document.getElementById('hall-modal').classList.remove('hidden')" class="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase">후원 등록</button>
             </header>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                <div>
-                    <h3 class="flex items-center gap-2 text-amber-500 font-black italic uppercase text-xs mb-4"><i data-lucide="coins" size="14"></i> Cash</h3>
-                    <div id="hall-cash-list"></div>
-                </div>
-                <div>
-                    <h3 class="flex items-center gap-2 text-purple-500 font-black italic uppercase text-xs mb-4"><i data-lucide="gift" size="14"></i> Items</h3>
-                    <div id="hall-item-list"></div>
-                </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div><h3 class="text-amber-500 font-black uppercase text-xs mb-4 italic">Cash</h3><div id="hall-cash-list"></div></div>
+                <div><h3 class="text-purple-500 font-black uppercase text-xs mb-4 italic">Items</h3><div id="hall-item-list"></div></div>
             </div>
         </section>
     </main>
@@ -424,12 +177,239 @@
                 <div id="hall-cash-input"><input id="hall-amount" type="number" placeholder="금액 (원)" class="w-full border p-3 rounded-xl text-xs font-bold"></div>
                 <div id="hall-item-input" style="display:none"><input id="hall-item" placeholder="물품 내용" class="w-full border p-3 rounded-xl text-xs font-bold"></div>
                 <div class="flex gap-2 pt-2">
-                    <button onclick="addHall()" class="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold text-[10px] uppercase">등록하기</button>
+                    <button onclick="addHall()" class="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold text-[10px] uppercase">등록</button>
                     <button onclick="document.getElementById('hall-modal').classList.add('hidden')" class="px-6 bg-slate-100 text-slate-400 rounded-xl font-bold text-[10px] uppercase">취소</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'udonggol-final';
+
+        let currentUser = null;
+        let adminRole = null; 
+        let currentView = 'home';
+        
+        const INITIAL_PLAYERS = ["영빈", "밤또", "낭빠", "비락", "벙커", "찐", "늘보", "호이서", "고들빠", "윤샷", "뒤땅", "버디풋", "곰둘", "버디레몬", "뚱", "쑤기", "세리", "심짱", "팔오", "꽝조이", "소하짱", "찰리심", "김부장", "뽀주니", "쭈니", "홍이", "우기", "하트", "털이", "최딩딩", "타이틀", "모키", "정종하", "아띠", "로드짱", "김대표", "최본말", "으랏챠", "토니", "쇼군", "입프로", "함또"];
+
+        const render = () => {
+            // Nav Link Style
+            document.querySelectorAll('.nav-link').forEach(link => {
+                const isActive = link.dataset.view === currentView;
+                link.classList.toggle('text-green-600', isActive);
+                link.classList.toggle('text-slate-300', !isActive);
+            });
+
+            // View Switch
+            document.querySelectorAll('.view-section').forEach(s => s.classList.add('hidden'));
+            const activeView = document.getElementById(`view-${currentView}`);
+            if(activeView) activeView.classList.remove('hidden');
+            
+            // Admin Display
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.classList.toggle('hidden', !adminRole);
+            });
+            
+            const lockBtn = document.getElementById('lock-btn');
+            if (lockBtn) {
+                lockBtn.innerHTML = adminRole ? '<i data-lucide="unlock"></i>' : '<i data-lucide="lock"></i>';
+                lockBtn.classList.toggle('text-green-600', !!adminRole);
+                lockBtn.classList.toggle('text-slate-400', !adminRole);
+            }
+            
+            if(window.lucide) window.lucide.createIcons();
+        };
+
+        const initSync = () => {
+            const errorCb = (e) => console.log("Permission delayed or denied, retrying...");
+
+            // 1. 공지사항
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), (snap) => {
+                const data = snap.exists() ? snap.data() : { text: "11:00 식사 후 13:10부터 티오프 진행합니다." };
+                document.getElementById('notice-text').innerText = data.text;
+                document.getElementById('notice-input').value = data.text;
+            }, errorCb);
+
+            // 2. 선수
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (snap) => {
+                const players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                updateDraftBoard(players);
+            }, errorCb);
+
+            // 3. 명예의전당
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'hall'), (snap) => {
+                const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                updateHallOfFame(items);
+            }, errorCb);
+
+            // 4. 채팅
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), (snap) => {
+                const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.timestamp - b.timestamp);
+                updateChat(msgs.slice(-30));
+            }, errorCb);
+        };
+
+        const updateDraftBoard = (players) => {
+            const jolamList = document.getElementById('jolam-list');
+            const yumkiList = document.getElementById('yumki-list');
+            const poolList = document.getElementById('pool-list');
+            if (!jolamList || !yumkiList || !poolList) return;
+
+            jolamList.innerHTML = ''; yumkiList.innerHTML = ''; poolList.innerHTML = '';
+            let jolamH = 0, yumkiH = 0, jolamC = 0, yumkiC = 0, poolC = 0;
+
+            players.sort((a,b) => (a.handicap || 0) - (b.handicap || 0) || a.name.localeCompare(b.name)).forEach(p => {
+                const card = document.createElement('div');
+                card.className = `p-2 rounded-xl border mb-2 transition-all ${p.team === 'jolam' ? 'bg-pink-50 border-pink-200' : p.team === 'yumki' ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 shadow-sm'}`;
+                
+                let adminUI = '';
+                if(adminRole) {
+                    adminUI = `
+                        <div class="mt-2 flex gap-1">
+                            ${!p.team ? `
+                                <button onclick="window.setTeam('${p.id}', 'jolam')" class="flex-1 bg-pink-500 text-white text-[9px] py-1 rounded font-bold">조람</button>
+                                <button onclick="window.setTeam('${p.id}', 'yumki')" class="flex-1 bg-blue-600 text-white text-[9px] py-1 rounded font-bold">염기</button>
+                            ` : `
+                                <button onclick="window.setTeam('${p.id}', null)" class="w-full bg-slate-200 text-slate-600 text-[9px] py-1 rounded font-bold">해제</button>
+                            `}
+                        </div>
+                        <input type="number" class="w-full mt-1 text-[9px] border rounded px-1 outline-none" placeholder="H." onblur="window.setHcap('${p.id}', this.value)" value="${p.handicap || 0}">
+                    `;
+                }
+
+                card.innerHTML = `<div class="flex justify-between items-center"><span class="font-black text-xs text-slate-800">${p.name}</span><span class="text-[8px] font-black bg-slate-100 px-1 py-0.5 rounded text-slate-400">H.${p.handicap || 0}</span></div>${adminUI}`;
+
+                if(p.team === 'jolam') { jolamList.appendChild(card); jolamH += (p.handicap || 0); jolamC++; }
+                else if(p.team === 'yumki') { yumkiList.appendChild(card); yumkiH += (p.handicap || 0); yumkiC++; }
+                else { poolList.appendChild(card); poolC++; }
+            });
+
+            document.getElementById('jolam-hcap').innerText = jolamH;
+            document.getElementById('yumki-hcap').innerText = yumkiH;
+            document.getElementById('jolam-count').innerText = jolamC;
+            document.getElementById('yumki-count').innerText = yumkiC;
+            document.getElementById('pool-count').innerText = poolC;
+        };
+
+        const updateHallOfFame = (items) => {
+            const cashList = document.getElementById('hall-cash-list');
+            const itemList = document.getElementById('hall-item-list');
+            if (!cashList || !itemList) return;
+            cashList.innerHTML = ''; itemList.innerHTML = '';
+            let totalCash = 0;
+            items.forEach(h => {
+                const el = document.createElement('div');
+                el.className = "bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center mb-2 shadow-sm";
+                if(h.type === 'cash') {
+                    totalCash += Number(h.amount);
+                    el.innerHTML = `<span class="font-bold text-slate-800 text-sm">${h.name}</span><span class="font-black text-amber-600">${Number(h.amount).toLocaleString()}원</span>`;
+                    cashList.appendChild(el);
+                } else {
+                    el.innerHTML = `<div><div class="font-bold text-slate-800 text-sm">${h.name}</div><div class="text-[9px] font-bold text-slate-400 uppercase">${h.item}</div></div>`;
+                    itemList.appendChild(el);
+                }
+            });
+            document.getElementById('total-cash-display').innerText = totalCash.toLocaleString();
+            document.getElementById('total-item-display').innerText = items.filter(i=>i.type==='item').length;
+        };
+
+        const updateChat = (msgs) => {
+            const chatBox = document.getElementById('chat-messages');
+            if (!chatBox) return;
+            chatBox.innerHTML = '';
+            msgs.forEach(m => {
+                const div = document.createElement('div');
+                div.className = `flex flex-col ${m.uid === currentUser?.uid ? 'items-end' : 'items-start'} mb-2`;
+                div.innerHTML = `
+                    <div class="px-3 py-2 rounded-2xl text-[11px] max-w-[85%] ${m.uid === currentUser?.uid ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-800'}">${m.text}</div>
+                    <span class="text-[8px] font-bold text-slate-400 mt-1">${m.user} · ${m.time}</span>
+                `;
+                chatBox.appendChild(div);
+            });
+            chatBox.scrollTop = chatBox.scrollHeight;
+        };
+
+        // Window Functions
+        window.changeView = (v) => { currentView = v; render(); };
+        window.setTeam = async (id, team) => { if(!adminRole) return; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { team }); };
+        window.setHcap = async (id, val) => { if(!adminRole) return; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { handicap: Number(val) || 0 }); };
+        window.saveNotice = async () => { 
+            const text = document.getElementById('notice-input').value;
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), { text, lastUpdated: Date.now() });
+            document.getElementById('notice-edit-modal').classList.add('hidden');
+        };
+        window.login = () => {
+            const pw = document.getElementById('admin-pw').value;
+            if(pw === '7777') adminRole = 'MASTER';
+            else if(pw === '0101') adminRole = 'JOLAM';
+            else if(pw === '0202') adminRole = 'YUMKI';
+            else return alert('비밀번호가 틀렸습니다.');
+            document.getElementById('admin-modal').classList.add('hidden');
+            render();
+        };
+        window.logout = () => { adminRole = null; render(); };
+        window.openAdmin = () => { if(adminRole) window.logout(); else document.getElementById('admin-modal').classList.remove('hidden'); };
+        window.sendChat = async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('chat-input');
+            if(!input.value.trim() || !currentUser) return;
+            const sender = adminRole ? (adminRole === 'MASTER' ? '운영진' : (adminRole === 'JOLAM' ? '조람단장' : '염기단장')) : '참가자';
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), {
+                text: input.value, user: sender, uid: currentUser.uid, timestamp: Date.now(),
+                time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+            });
+            input.value = '';
+        };
+        window.addHall = async () => {
+            const name = document.getElementById('hall-name').value;
+            const type = document.getElementById('hall-type').value;
+            const amount = document.getElementById('hall-amount').value;
+            const item = document.getElementById('hall-item').value;
+            if(!name) return;
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'hall'), { name, type, amount, item, timestamp: Date.now() });
+            document.getElementById('hall-modal').classList.add('hidden');
+        };
+        window.initPlayers = async () => {
+            if(adminRole !== 'MASTER') return;
+            if(!confirm('선수 명단을 초기화하시겠습니까?')) return;
+            for(let i=0; i<INITIAL_PLAYERS.length; i++) {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', `p${i}`), { name: INITIAL_PLAYERS[i], team: null, handicap: 0 });
+            }
+        };
+
+        // On Load
+        window.addEventListener('load', async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        initSync();
+                        render();
+                        // Show App
+                        document.getElementById('loading-overlay').classList.add('hidden');
+                        document.getElementById('app-main').style.opacity = '1';
+                    }
+                });
+            } catch (err) {
+                console.error("Initialization error:", err);
+            }
+        });
+    </script>
 </body>
 </html>
