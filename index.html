@@ -11,16 +11,15 @@
     <style>
         body { font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
         
-        /* 섹션 가시성 제어 - 초기 상태는 모두 숨김 */
-        .view-section { display: none; opacity: 0; }
-        .view-section.active { display: block; opacity: 1; animation: fadeIn 0.3s ease-out; }
+        /* 섹션 가시성 제어 - !important를 추가하여 강제 적용 보장 */
+        .view-section { display: none !important; opacity: 0; }
+        .view-section.active { display: block !important; opacity: 1; animation: fadeIn 0.3s ease-out forwards; }
         
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(5px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* 내비게이션 활성화 상태 */
         .nav-btn.active { color: #16a34a !important; background-color: #f0fdf4 !important; border-radius: 0.75rem; }
         .admin-only-ui { display: none !important; }
         .admin-only-ui.show { display: flex !important; }
@@ -54,7 +53,7 @@
     <main class="md:ml-20 p-4 md:p-10 max-w-6xl mx-auto min-h-screen">
         
         <!-- Admin Badge -->
-        <div id="admin-badge" class="hidden mb-6 flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-2xl w-fit">
+        <div id="admin-badge" class="hidden mb-6 items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-2xl w-fit">
             <i data-lucide="shield-check" size="14" class="text-green-400"></i>
             <span id="admin-role-text" class="text-[10px] font-black uppercase tracking-widest">Admin</span>
         </div>
@@ -72,7 +71,7 @@
                 <div class="bg-slate-900 rounded-3xl p-6 text-white relative overflow-hidden h-44 flex flex-col justify-end shadow-xl">
                     <h3 class="text-slate-400 text-[10px] font-bold uppercase mb-1 italic">Tournament Date</h3>
                     <p class="text-xl font-bold leading-tight">2026. 03. 29 (SUN)<br><span class="text-green-400 italic font-black">Shinedale CC</span></p>
-                    <i data-lucide="calendar" class="absolute -top-4 -right-4 w-32 h-32 text-white/5"></i>
+                    <i data-lucide="calendar" class="absolute -top-4 -right-4 w-32 h-32 text-white/5 pointer-events-none"></i>
                 </div>
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 flex flex-col justify-center relative shadow-sm h-44">
                     <div class="flex items-center justify-between mb-2">
@@ -127,7 +126,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                     <input id="reg-name" type="text" class="bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm outline-none" placeholder="선수명">
                     <input id="reg-hcap" type="number" class="bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm outline-none" placeholder="핸디">
-                    <button onclick="window.addPlayer()" class="md:col-span-2 bg-green-600 text-white rounded-xl font-black text-xs uppercase py-3 shadow-lg">선수 추가</button>
+                    <button onclick="window.uiActions.addPlayer()" class="md:col-span-2 bg-green-600 text-white rounded-xl font-black text-xs uppercase py-3 shadow-lg">선수 추가</button>
                 </div>
                 <div id="reg-list" class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-4 border-t border-slate-100"></div>
             </div>
@@ -140,7 +139,7 @@
                 <div class="flex flex-col md:flex-row gap-3">
                     <input id="hall-spon-user" type="text" class="flex-1 bg-white border border-amber-200 rounded-xl p-3 text-sm font-bold" placeholder="후원자 성함">
                     <input id="hall-spon-item" type="text" class="flex-1 bg-white border border-amber-200 rounded-xl p-3 text-sm font-bold" placeholder="후원 물품">
-                    <button onclick="window.addSponsor()" class="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase shadow-lg">등록</button>
+                    <button onclick="window.uiActions.addSponsor()" class="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase shadow-lg">등록</button>
                 </div>
             </div>
             <div id="sponsor-list-full" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10"></div>
@@ -148,7 +147,24 @@
 
     </main>
 
-    <!-- Admin Modal -->
+    <!-- UI Custom Modal (대화상자 대체용) -->
+    <div id="custom-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div class="bg-white rounded-[32px] p-6 w-full max-w-sm shadow-2xl transition-all">
+            <h3 id="cm-title" class="font-black uppercase mb-2 italic text-sm text-slate-800">알림</h3>
+            <p id="cm-msg" class="text-slate-600 font-bold text-sm mb-6 whitespace-pre-line"></p>
+            
+            <div id="cm-input-container" class="hidden mb-6">
+                <input id="cm-input" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm outline-none">
+            </div>
+
+            <div class="flex gap-2">
+                <button id="cm-cancel" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-black text-xs uppercase hidden">취소</button>
+                <button id="cm-confirm" class="flex-1 bg-green-600 text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
     <div id="admin-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
         <div class="bg-white rounded-[40px] p-8 w-full max-w-[280px] text-center shadow-2xl">
             <h3 class="font-black uppercase mb-4 italic text-sm">Admin Access</h3>
@@ -158,162 +174,164 @@
         </div>
     </div>
 
-    <!-- Firebase Scripts -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
-        // Configuration
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'udg-v6-stable';
-        
+    <!-- PART 1: UI Core Script (안정적인 화면 전환 보장) -->
+    <script>
+        // 글로벌 상태 선언
+        window.appState = { view: 'home', role: null, players: [], sponsors: [], config: {}, user: null };
         const ADMIN_PINS = { '1234': 'jolam', '5678': 'yumki', '0000': 'master' };
-        let state = { view: 'home', role: null, players: [], sponsors: [], config: {}, user: null };
 
-        // Firebase References
-        const getColl = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
-        const getDocR = (coll, id) => doc(db, 'artifacts', appId, 'public', 'data', coll, id);
+        // 커스텀 모달 제어 함수 (alert/confirm/prompt 완벽 대체)
+        window.showModal = (opts) => {
+            const { title = '알림', msg, showInput = false, inputValue = '', showCancel = false, onConfirm } = opts;
+            
+            document.getElementById('cm-title').innerText = title;
+            document.getElementById('cm-msg').innerText = msg;
+            
+            const inputContainer = document.getElementById('cm-input-container');
+            const inputEl = document.getElementById('cm-input');
+            if(showInput) {
+                inputContainer.classList.remove('hidden');
+                inputEl.value = inputValue;
+            } else {
+                inputContainer.classList.add('hidden');
+            }
 
-        // --- GLOBAL FUNCTIONS ---
-        
+            const cancelBtn = document.getElementById('cm-cancel');
+            if(showCancel) cancelBtn.classList.remove('hidden');
+            else cancelBtn.classList.add('hidden');
+
+            const confirmBtn = document.getElementById('cm-confirm');
+            
+            // 이벤트 리스너 중복 방지를 위한 클론 교체
+            confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+            const newConfirmBtn = document.getElementById('cm-confirm');
+            const newCancelBtn = document.getElementById('cm-cancel');
+
+            newConfirmBtn.onclick = () => {
+                document.getElementById('custom-modal').classList.add('hidden');
+                if(onConfirm) onConfirm(showInput ? inputEl.value : true);
+            };
+
+            newCancelBtn.onclick = () => {
+                document.getElementById('custom-modal').classList.add('hidden');
+            };
+
+            document.getElementById('custom-modal').classList.remove('hidden');
+        };
+
+        // UI 탭 전환 로직 (가장 안정적으로 동작)
         window.changeView = (v) => {
-            if(v === 'register' && state.role !== 'master') {
-                alert('마스터 관리자 전용 메뉴입니다.');
+            if(v === 'register' && window.appState.role !== 'master') {
+                window.showModal({ msg: '마스터 관리자 전용 메뉴입니다.' });
                 return;
             }
-            state.view = v;
+            window.appState.view = v;
             
+            // 모든 섹션 숨기기
             document.querySelectorAll('.view-section').forEach(sec => {
                 sec.classList.remove('active');
-                if(sec.id === `view-${v}`) sec.classList.add('active');
             });
+            // 타겟 섹션 보이기
+            const target = document.getElementById(`view-${v}`);
+            if(target) target.classList.add('active');
 
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if(btn.id === `nav-${v}` || btn.id === `m-nav-${v}`) btn.classList.add('active');
-            });
+            // 내비게이션 버튼 스타일 변경
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll(`#nav-${v}, #m-nav-${v}`).forEach(btn => btn.classList.add('active'));
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
             if(window.lucide) window.lucide.createIcons();
         };
 
+        // 관리자 로그인/로그아웃 로직
         window.toggleAdminAuth = () => {
-            if(state.role) {
-                if(confirm('로그아웃 하시겠습니까?')) {
-                    state.role = null;
-                    if(state.view === 'register') window.changeView('home');
-                    renderUI();
-                }
+            if(window.appState.role) {
+                window.showModal({
+                    msg: '로그아웃 하시겠습니까?',
+                    showCancel: true,
+                    onConfirm: () => {
+                        window.appState.role = null;
+                        if(window.appState.view === 'register') window.changeView('home');
+                        window.renderUI();
+                    }
+                });
             } else {
                 document.getElementById('admin-modal').classList.remove('hidden');
+                document.getElementById('admin-pw').value = '';
+                document.getElementById('admin-pw').focus();
             }
         };
 
         window.doLogin = () => {
             const pin = document.getElementById('admin-pw').value;
             if(ADMIN_PINS[pin]) {
-                state.role = ADMIN_PINS[pin];
+                window.appState.role = ADMIN_PINS[pin];
                 document.getElementById('admin-modal').classList.add('hidden');
-                document.getElementById('admin-pw').value = "";
-                renderUI();
+                window.renderUI();
             } else {
-                alert('비밀번호가 틀렸습니다.');
+                window.showModal({ msg: '비밀번호가 틀렸습니다.' });
             }
         };
 
-        window.addPlayer = async () => {
-            const name = document.getElementById('reg-name').value.trim();
-            const h = Number(document.getElementById('reg-hcap').value);
-            if(name && state.user) {
-                await addDoc(getColl('players'), { name, h, t: 'none', createdAt: Date.now() });
-                document.getElementById('reg-name').value = "";
-                document.getElementById('reg-hcap').value = "";
-            }
-        };
-
-        window.deletePlayer = async (id) => {
-            if(state.role === 'master' && confirm('삭제하시겠습니까?')) {
-                await deleteDoc(getDocR('players', id));
-            }
-        };
-
-        window.setTeam = async (id, team) => {
-            if(state.user) await updateDoc(getDocR('players', id), { t: team });
-        };
-
-        window.addSponsor = async () => {
-            const user = document.getElementById('hall-spon-user').value.trim();
-            const item = document.getElementById('hall-spon-item').value.trim();
-            if(user && item && state.user) {
-                await addDoc(getColl('sponsors'), { user, item, createdAt: Date.now() });
-                document.getElementById('hall-spon-user').value = "";
-                document.getElementById('hall-spon-item').value = "";
-            }
-        };
-
-        window.deleteSponsor = async (id) => {
-            if(state.role === 'master' && confirm('삭제하시겠습니까?')) {
-                await deleteDoc(getDocR('sponsors', id));
-            }
-        };
-
-        window.openNoticeEditor = () => {
-            const n = prompt("새 공지사항 입력:", state.config.notice || "");
-            if(n !== null) setDoc(getDocR('config', 'main'), { notice: n }, { merge: true });
-        };
-
-        // --- RENDER LOGIC ---
-
-        const renderUI = () => {
-            const isAnyAdmin = !!state.role;
-            const isMaster = state.role === 'master';
+        // UI 렌더링 함수 (데이터가 업데이트될 때 호출됨)
+        window.renderUI = () => {
+            const isAnyAdmin = !!window.appState.role;
+            const isMaster = window.appState.role === 'master';
 
             document.querySelectorAll('.admin-only-ui').forEach(el => {
-                if(el.id.includes('register')) el.classList.toggle('show', isMaster);
+                if(el.id && el.id.includes('register')) el.classList.toggle('show', isMaster);
                 else el.classList.toggle('show', isAnyAdmin);
             });
 
-            document.getElementById('admin-badge').classList.toggle('hidden', !isAnyAdmin);
-            if(isAnyAdmin) document.getElementById('admin-role-text').innerText = `${state.role} admin active`;
+            const badge = document.getElementById('admin-badge');
+            if(badge) {
+                if(isAnyAdmin) {
+                    badge.style.display = 'flex';
+                    document.getElementById('admin-role-text').innerText = `${window.appState.role} admin`;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
 
             const indicators = [document.getElementById('admin-indicator'), document.getElementById('m-admin-indicator')];
             indicators.forEach(i => {
+                if(!i) return;
                 i.innerHTML = `<i data-lucide="${isAnyAdmin ? 'unlock' : 'lock'}"></i>`;
                 i.className = `p-3 rounded-xl transition-all ${isAnyAdmin ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`;
             });
 
             document.getElementById('sponsor-admin-block').classList.toggle('hidden', !isMaster);
 
-            renderPlayerLists();
-            renderSponsors();
+            window.renderPlayerLists();
+            window.renderSponsors();
             if(window.lucide) window.lucide.createIcons();
         };
 
-        const renderPlayerLists = () => {
+        window.renderPlayerLists = () => {
             const regList = document.getElementById('reg-list');
             const draftGrid = document.getElementById('draft-grid');
             if(!regList || !draftGrid) return;
 
-            document.getElementById('total-player-badge').innerText = `${state.players.length}명`;
+            document.getElementById('total-player-badge').innerText = `${window.appState.players.length}명`;
             
-            regList.innerHTML = state.players.sort((a,b) => (a.h||0)-(b.h||0)).map(p => `
+            // Delete SVG inline to avoid lucide issues dynamically
+            const trashSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`;
+
+            regList.innerHTML = [...window.appState.players].sort((a,b) => (a.h||0)-(b.h||0)).map(p => `
                 <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
                     <span class="font-bold text-slate-700">${p.name} <span class="text-[10px] text-slate-400 ml-1">H${p.h}</span></span>
-                    <button onclick="window.deletePlayer('${p.id}')" class="text-slate-300 hover:text-red-500"><i data-lucide="trash-2" size="14"></i></button>
+                    <button onclick="window.uiActions.deletePlayer('${p.id}')" class="text-slate-300 hover:text-red-500">${trashSvg}</button>
                 </div>
             `).join('');
 
             let counts = { jolam: 0, yumki: 0, none: 0 };
-            draftGrid.innerHTML = [...state.players].sort((a,b) => (a.h||0)-(b.h||0)).map(p => {
+            draftGrid.innerHTML = [...window.appState.players].sort((a,b) => (a.h||0)-(b.h||0)).map(p => {
                 const team = p.t || 'none';
                 counts[team]++;
                 const cardClass = team === 'jolam' ? 'border-2 border-rose-500 bg-rose-50' : (team === 'yumki' ? 'border-2 border-blue-600 bg-blue-50' : 'bg-white border border-slate-200');
-                const canSelectJolam = state.role === 'master' || state.role === 'jolam';
-                const canSelectYumki = state.role === 'master' || state.role === 'yumki';
+                const canSelectJolam = window.appState.role === 'master' || window.appState.role === 'jolam';
+                const canSelectYumki = window.appState.role === 'master' || window.appState.role === 'yumki';
 
                 return `
                 <div class="${cardClass} p-4 rounded-2xl flex flex-col justify-between h-32 shadow-sm transition-all">
@@ -322,8 +340,8 @@
                         <span class="text-[10px] font-black italic text-slate-400 uppercase">Handicap: ${p.h||0}</span>
                     </div>
                     <div class="flex gap-1">
-                        ${canSelectJolam ? `<button onclick="window.setTeam('${p.id}', '${team === 'jolam' ? 'none' : 'jolam'}')" class="flex-1 py-1 rounded-lg text-[8px] font-black ${team === 'jolam' ? 'bg-rose-500 text-white' : 'bg-white border border-slate-200'}">JOLAM</button>` : ''}
-                        ${canSelectYumki ? `<button onclick="window.setTeam('${p.id}', '${team === 'yumki' ? 'none' : 'yumki'}')" class="flex-1 py-1 rounded-lg text-[8px] font-black ${team === 'yumki' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200'}">YUMKI</button>` : ''}
+                        ${canSelectJolam ? `<button onclick="window.uiActions.setTeam('${p.id}', '${team === 'jolam' ? 'none' : 'jolam'}')" class="flex-1 py-1 rounded-lg text-[8px] font-black ${team === 'jolam' ? 'bg-rose-500 text-white' : 'bg-white border border-slate-200'}">JOLAM</button>` : ''}
+                        ${canSelectYumki ? `<button onclick="window.uiActions.setTeam('${p.id}', '${team === 'yumki' ? 'none' : 'yumki'}')" class="flex-1 py-1 rounded-lg text-[8px] font-black ${team === 'yumki' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200'}">YUMKI</button>` : ''}
                     </div>
                 </div>`;
             }).join('');
@@ -333,12 +351,14 @@
             document.getElementById('count-pending').innerText = counts.none;
         };
 
-        const renderSponsors = () => {
+        window.renderSponsors = () => {
             const homeList = document.getElementById('home-sponsor-list');
             const fullList = document.getElementById('sponsor-list-full');
+            const trashSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`;
+            const giftSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>`;
             
             if(homeList) {
-                homeList.innerHTML = state.sponsors.length ? state.sponsors.map(s => `
+                homeList.innerHTML = window.appState.sponsors.length ? window.appState.sponsors.map(s => `
                     <div class="bg-white min-w-[140px] p-3 rounded-2xl border border-amber-200 shadow-sm flex flex-col">
                         <span class="text-[9px] font-black text-amber-600 uppercase mb-1">${s.user}님</span>
                         <span class="text-[11px] font-bold text-slate-800 line-clamp-1">${s.item}</span>
@@ -347,77 +367,169 @@
             }
 
             if(fullList) {
-                fullList.innerHTML = state.sponsors.map(s => `
+                fullList.innerHTML = window.appState.sponsors.map(s => `
                     <div class="bg-white rounded-3xl p-5 border border-slate-200 flex items-start gap-4 shadow-sm">
-                        <div class="p-3 bg-amber-100 text-amber-600 rounded-2xl"><i data-lucide="gift" size="20"></i></div>
+                        <div class="p-3 bg-amber-100 text-amber-600 rounded-2xl">${giftSvg}</div>
                         <div class="flex-1">
                             <h4 class="text-xs font-black text-slate-400 uppercase mb-1">${s.user}님</h4>
                             <p class="text-base font-bold text-slate-800">${s.item}</p>
                         </div>
-                        ${state.role === 'master' ? `<button onclick="window.deleteSponsor('${s.id}')" class="text-slate-200 hover:text-red-500"><i data-lucide="trash-2" size="14"></i></button>` : ''}
+                        ${window.appState.role === 'master' ? `<button onclick="window.uiActions.deleteSponsor('${s.id}')" class="text-slate-200 hover:text-red-500">${trashSvg}</button>` : ''}
                     </div>
                 `).join('');
             }
         };
 
-        // --- SYNC ENGINE (Only after AUTH) ---
-
-        const startSync = () => {
-            if (!state.user) return;
-            
-            // Error handling callbacks added to prevent silent permission crashes
-            const errCb = (err) => console.error("Firestore Permission/Sync Error:", err);
-
-            onSnapshot(getColl('players'), (s) => {
-                state.players = s.docs.map(d => ({id: d.id, ...d.data()}));
-                renderUI();
-            }, errCb);
-
-            onSnapshot(getColl('sponsors'), (s) => {
-                state.sponsors = s.docs.map(d => ({id: d.id, ...d.data()}));
-                renderSponsors();
-                if(window.lucide) window.lucide.createIcons();
-            }, errCb);
-
-            onSnapshot(getDocR('config', 'main'), (d) => {
-                if(d.exists()) {
-                    state.config = d.data();
-                    document.getElementById('notice-text').innerText = state.config.notice || "실력보다 매너, 스코어보다 우정";
+        // 데이터베이스를 호출하기 위한 UI 액션 매핑 (Firebase 스크립트가 로드되면 실제 동작함)
+        window.uiActions = {
+            addPlayer: () => {
+                const name = document.getElementById('reg-name').value.trim();
+                const h = Number(document.getElementById('reg-hcap').value);
+                if(name && window.dbActions) {
+                    window.dbActions.addPlayer(name, h);
+                    document.getElementById('reg-name').value = "";
+                    document.getElementById('reg-hcap').value = "";
+                } else if(!window.dbActions) {
+                    window.showModal({ msg: '데이터베이스 연결 중입니다. 잠시 후 시도해주세요.' });
                 }
-            }, errCb);
-        };
-
-        // --- INIT ---
-
-        onAuthStateChanged(auth, (u) => {
-            state.user = u;
-            if (u) {
-                console.log("Authenticated as:", u.uid);
-                startSync();
-            }
-        });
-
-        const initAuth = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
+            },
+            deletePlayer: (id) => {
+                if(window.appState.role === 'master') {
+                    window.showModal({ msg: '이 선수를 삭제하시겠습니까?', showCancel: true, onConfirm: () => {
+                        if(window.dbActions) window.dbActions.deletePlayer(id);
+                    }});
                 }
-            } catch (e) {
-                console.error("Authentication failed:", e);
+            },
+            setTeam: (id, team) => {
+                if(window.dbActions) window.dbActions.setTeam(id, team);
+            },
+            addSponsor: () => {
+                const user = document.getElementById('hall-spon-user').value.trim();
+                const item = document.getElementById('hall-spon-item').value.trim();
+                if(user && item && window.dbActions) {
+                    window.dbActions.addSponsor(user, item);
+                    document.getElementById('hall-spon-user').value = "";
+                    document.getElementById('hall-spon-item').value = "";
+                }
+            },
+            deleteSponsor: (id) => {
+                if(window.appState.role === 'master') {
+                    window.showModal({ msg: '이 후원 내역을 삭제하시겠습니까?', showCancel: true, onConfirm: () => {
+                        if(window.dbActions) window.dbActions.deleteSponsor(id);
+                    }});
+                }
             }
         };
 
-        // Start initialization
-        initAuth();
-        
-        // Ensure icons load eventually
+        window.openNoticeEditor = () => {
+            window.showModal({
+                title: '공지사항 편집',
+                msg: '새로운 공지사항을 입력하세요.',
+                showInput: true,
+                inputValue: window.appState.config.notice || '',
+                showCancel: true,
+                onConfirm: (val) => {
+                    if(window.dbActions && val) window.dbActions.updateNotice(val);
+                }
+            });
+        };
+
+        // 초기 아이콘 로드
         window.addEventListener('load', () => {
-            setTimeout(() => {
-                if(window.lucide) window.lucide.createIcons();
-            }, 1000);
+            setTimeout(() => { if(window.lucide) window.lucide.createIcons(); }, 300);
         });
+    </script>
+
+    <!-- PART 2: Firebase Module (데이터 연동 및 백엔드) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        let app, db, auth;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'udg-v6-stable';
+
+        try {
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } catch(e) {
+            console.error("Firebase 초기화 에러 (개발 환경 등):", e);
+        }
+
+        if(db && auth) {
+            // DB 액션 노출
+            window.dbActions = {
+                addPlayer: async (name, h) => {
+                    if(!window.appState.user) return;
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'players'), { name, h, t: 'none', createdAt: Date.now() });
+                },
+                deletePlayer: async (id) => {
+                    if(!window.appState.user) return;
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id));
+                },
+                setTeam: async (id, team) => {
+                    if(!window.appState.user) return;
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { t: team });
+                },
+                addSponsor: async (user, item) => {
+                    if(!window.appState.user) return;
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'sponsors'), { user, item, createdAt: Date.now() });
+                },
+                deleteSponsor: async (id) => {
+                    if(!window.appState.user) return;
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sponsors', id));
+                },
+                updateNotice: async (notice) => {
+                    if(!window.appState.user) return;
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), { notice }, { merge: true });
+                }
+            };
+
+            // 동기화 엔진 (규칙에 따라 인증 완료 후 실행)
+            const startSync = () => {
+                if (!window.appState.user) return;
+                const errCb = (err) => console.error("Firestore Sync Error:", err);
+
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (s) => {
+                    window.appState.players = s.docs.map(d => ({id: d.id, ...d.data()}));
+                    window.renderUI();
+                }, errCb);
+
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sponsors'), (s) => {
+                    window.appState.sponsors = s.docs.map(d => ({id: d.id, ...d.data()}));
+                    window.renderUI();
+                }, errCb);
+
+                onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), (d) => {
+                    if(d.exists()) {
+                        window.appState.config = d.data();
+                        const noticeEl = document.getElementById('notice-text');
+                        if(noticeEl) noticeEl.innerText = window.appState.config.notice || "실력보다 매너, 스코어보다 우정";
+                    }
+                }, errCb);
+            };
+
+            // 인증 흐름 설정
+            onAuthStateChanged(auth, (u) => {
+                window.appState.user = u;
+                if (u) startSync();
+            });
+
+            const initAuth = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (e) {
+                    console.error("Auth Error:", e);
+                }
+            };
+            initAuth();
+        }
     </script>
 </body>
 </html>
