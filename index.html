@@ -8,9 +8,12 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .view-section { display: none; }
-        .view-section.active { display: block; }
+        body { font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+        
+        /* 화면 전환 핵심 스타일 */
+        .view-section { display: none !important; }
+        .view-section.active { display: block !important; }
+        
         .nav-link.active { color: #16a34a; background-color: #f0fdf4; }
         
         .admin-only-ui { display: none !important; }
@@ -20,11 +23,11 @@
         .team-card-yumki { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #60a5fa; }
         .team-card-none { background: white; border: 1px dashed #cbd5e1; }
         
-        .player-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        
-        /* Custom scrollbar for horizontal lists */
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 레이아웃 여백 조정 */
+        main { min-height: 100vh; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 pb-24 md:pb-0">
@@ -67,12 +70,12 @@
             </header>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="bg-slate-900 rounded-3xl p-6 text-white relative overflow-hidden h-40 flex flex-col justify-end">
+                <div class="bg-slate-900 rounded-3xl p-6 text-white relative overflow-hidden h-40 flex flex-col justify-end shadow-xl">
                     <h3 class="text-slate-400 text-[10px] font-bold uppercase mb-1 italic">Tournament Date</h3>
                     <p class="text-xl font-bold leading-tight">2026. 03. 29 (SUN)<br><span class="text-green-400 italic">Shinedale CC</span></p>
                     <i data-lucide="calendar" class="absolute -top-4 -right-4 w-32 h-32 text-white/5"></i>
                 </div>
-                <div class="bg-white border border-slate-200 rounded-3xl p-6 flex flex-col justify-center relative group">
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 flex flex-col justify-center relative shadow-sm">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2 text-slate-400">
                             <i data-lucide="megaphone" size="14"></i> 
@@ -91,28 +94,29 @@
                         <i data-lucide="heart" class="text-amber-500 fill-amber-500" size="18"></i>
                         <h3 class="font-black italic uppercase text-amber-800 tracking-tight">Sponsorship List</h3>
                     </div>
-                    <button onclick="changeView('hall')" class="text-[10px] font-black text-amber-600 bg-white px-3 py-1 rounded-full border border-amber-200 shadow-sm">더보기</button>
+                    <button onclick="changeView('hall')" class="text-[10px] font-black text-amber-600 bg-white px-3 py-1 rounded-full border border-amber-200 shadow-sm">전체보기</button>
                 </div>
                 <div id="home-sponsor-list" class="flex gap-3 overflow-x-auto hide-scroll pb-2 relative z-10">
                     <!-- Home sponsors injected here -->
-                    <p class="text-slate-400 text-xs italic">현재 등록된 후원이 없습니다.</p>
                 </div>
-                <i data-lucide="sparkles" class="absolute -bottom-6 -right-6 w-32 h-32 text-amber-200/40"></i>
             </div>
         </section>
 
         <!-- Draft Board Section -->
         <section id="view-draft" class="view-section space-y-6">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-2xl font-black italic uppercase tracking-tighter">Team Draft</h2>
+            </div>
             <div class="grid grid-cols-3 gap-3">
-                <div class="bg-rose-500 rounded-2xl p-4 text-white shadow-lg shadow-rose-200">
+                <div class="bg-rose-500 rounded-2xl p-4 text-white shadow-lg">
                     <p class="text-[9px] font-black uppercase tracking-widest opacity-80">Jolam Team</p>
                     <p class="text-3xl font-black italic"><span id="count-jolam">0</span><span class="text-sm opacity-60 ml-1">P</span></p>
                 </div>
-                <div class="bg-blue-600 rounded-2xl p-4 text-white shadow-lg shadow-blue-200">
+                <div class="bg-blue-600 rounded-2xl p-4 text-white shadow-lg">
                     <p class="text-[9px] font-black uppercase tracking-widest opacity-80">Yumki Team</p>
                     <p class="text-3xl font-black italic"><span id="count-yumki">0</span><span class="text-sm opacity-60 ml-1">P</span></p>
                 </div>
-                <div class="bg-slate-100 rounded-2xl p-4 text-slate-400 border border-slate-200">
+                <div class="bg-slate-200 rounded-2xl p-4 text-slate-500 border border-slate-300">
                     <p class="text-[9px] font-black uppercase tracking-widest opacity-80">Pending</p>
                     <p class="text-3xl font-black italic"><span id="count-pending">0</span><span class="text-sm opacity-60 ml-1">P</span></p>
                 </div>
@@ -123,14 +127,14 @@
         <!-- Registration Section (MASTER ONLY) -->
         <section id="view-register" class="view-section space-y-4">
              <div class="flex items-center justify-between">
-                <h2 class="text-2xl font-black italic uppercase tracking-tighter">Member Management</h2>
+                <h2 class="text-2xl font-black italic uppercase tracking-tighter">Registration</h2>
                 <span id="total-player-badge" class="bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg">0명</span>
              </div>
-             <div class="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+             <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <input id="reg-name" type="text" class="bg-slate-50 border border-slate-100 rounded-xl p-3 font-bold text-sm outline-none" placeholder="선수 닉네임">
+                    <input id="reg-name" type="text" class="bg-slate-50 border border-slate-100 rounded-xl p-3 font-bold text-sm outline-none" placeholder="선수명">
                     <input id="reg-hcap" type="number" class="bg-slate-50 border border-slate-100 rounded-xl p-3 font-bold text-sm outline-none" placeholder="핸디캡">
-                    <button onclick="addPlayer()" class="md:col-span-2 bg-green-600 text-white rounded-xl font-black text-xs uppercase hover:bg-green-700 transition-colors">새로운 참가자 추가</button>
+                    <button onclick="addPlayer()" class="md:col-span-2 bg-green-600 text-white rounded-xl font-black text-xs uppercase hover:bg-green-700 transition-colors py-3">선수 추가</button>
                 </div>
                 <div id="reg-list" class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-4 border-t border-slate-100"></div>
             </div>
@@ -138,26 +142,26 @@
 
         <!-- Sponsorship Section -->
         <section id="view-hall" class="view-section space-y-6">
-            <h2 class="text-2xl font-black italic uppercase tracking-tighter text-amber-600">Sponsorship</h2>
-            <div id="sponsor-admin-block" class="hidden bg-amber-50 border border-amber-100 rounded-3xl p-4 space-y-3">
+            <h2 class="text-2xl font-black italic uppercase tracking-tighter text-amber-600">Hall of Fame</h2>
+            <div id="sponsor-admin-block" class="hidden bg-amber-50 border border-amber-100 rounded-3xl p-4 space-y-3 shadow-inner">
                 <div class="flex flex-col md:flex-row gap-3">
-                    <input id="hall-spon-user" type="text" class="flex-1 bg-white border border-amber-200 rounded-xl p-3 text-sm font-bold outline-none" placeholder="후원자">
-                    <input id="hall-spon-item" type="text" class="flex-1 bg-white border border-amber-200 rounded-xl p-3 text-sm font-bold outline-none" placeholder="내용">
-                    <button onclick="addSponsor()" class="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase hover:bg-amber-600">등록</button>
+                    <input id="hall-spon-user" type="text" class="flex-1 bg-white border border-amber-200 rounded-xl p-3 text-sm font-bold outline-none" placeholder="후원자 성함">
+                    <input id="hall-spon-item" type="text" class="flex-1 bg-white border border-amber-200 rounded-xl p-3 text-sm font-bold outline-none" placeholder="후원 물품/내용">
+                    <button onclick="addSponsor()" class="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase hover:bg-amber-600 transition-colors shadow-lg shadow-amber-200">등록하기</button>
                 </div>
             </div>
-            <div id="sponsor-list-full" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            <div id="sponsor-list-full" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10"></div>
         </section>
 
     </main>
 
     <!-- Admin PIN Modal -->
     <div id="admin-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
-        <div class="bg-white rounded-[40px] p-8 w-full max-w-[280px] text-center shadow-2xl">
-            <h3 class="font-black uppercase mb-4 italic text-sm">관리자 로그인</h3>
-            <input id="admin-pw" type="password" class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center font-black mb-4 focus:ring-2 ring-green-500 outline-none" placeholder="PIN 입력">
-            <button onclick="doLogin()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase">확인</button>
-            <button onclick="document.getElementById('admin-modal').classList.add('hidden')" class="w-full mt-2 text-slate-400 text-[10px] font-bold uppercase">닫기</button>
+        <div class="bg-white rounded-[40px] p-8 w-full max-w-[280px] text-center shadow-2xl scale-in">
+            <h3 class="font-black uppercase mb-4 italic text-sm">Admin Access</h3>
+            <input id="admin-pw" type="password" class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center font-black mb-4 focus:ring-2 ring-green-500 outline-none" placeholder="PIN CODE">
+            <button onclick="doLogin()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl">Login</button>
+            <button onclick="document.getElementById('admin-modal').classList.add('hidden')" class="w-full mt-2 text-slate-400 text-[10px] font-bold uppercase">Cancel</button>
         </div>
     </div>
 
@@ -176,18 +180,18 @@
 
         let state = { view: 'home', role: null, players: [], sponsors: [], config: {}, user: null };
 
-        // Firestore Accessors
+        // Helper
         const getCollRef = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
         const getDocRef = (coll, id) => doc(db, 'artifacts', appId, 'public', 'data', coll, id);
 
-        // Sync Management
+        // Core Functions
         const startSync = () => {
             if (!state.user) return;
             
             onSnapshot(getCollRef('players'), (s) => {
                 state.players = s.docs.map(d => ({id: d.id, ...d.data()}));
                 renderAll();
-            }, (err) => console.error("Player Error:", err));
+            });
 
             onSnapshot(getDocRef('config', 'main'), (d) => {
                 if(d.exists()) {
@@ -207,7 +211,8 @@
             updateAdminUI();
             renderDraft();
             renderRegisterList();
-            renderSponsors(); // Also updates home widget
+            renderSponsors();
+            if(window.lucide) window.lucide.createIcons();
         };
 
         const updateAdminUI = () => {
@@ -233,10 +238,9 @@
             [ind, mInd].forEach(i => {
                 if(i) {
                     i.classList.toggle('bg-green-50', isAnyAdmin);
-                    i.innerHTML = isAnyAdmin ? '<i data-lucide="unlock" class="text-green-600" size="20"></i>' : '<i data-lucide="lock" size="20"></i>';
+                    i.innerHTML = isAnyAdmin ? '<i data-lucide="unlock" class="text-green-600"></i>' : '<i data-lucide="lock"></i>';
                 }
             });
-            if(window.lucide) window.lucide.createIcons();
         };
 
         const renderRegisterList = () => {
@@ -246,10 +250,10 @@
             list.innerHTML = state.players.sort((a,b) => (a.h||0)-(b.h||0)).map(p => `
                 <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
                     <div class="flex items-center gap-3">
-                        <span class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[10px] font-black border border-slate-200">${p.h||0}</span>
+                        <span class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[10px] font-black border border-slate-200 shadow-sm">${p.h||0}</span>
                         <span class="font-bold text-slate-700">${p.name}</span>
                     </div>
-                    <button onclick="window.deletePlayer('${p.id}')" class="p-2 text-slate-300 hover:text-red-500"><i data-lucide="trash-2" size="14"></i></button>
+                    <button onclick="window.deletePlayer('${p.id}')" class="p-2 text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="trash-2" size="14"></i></button>
                 </div>
             `).join('');
             if(window.lucide) window.lucide.createIcons();
@@ -268,19 +272,18 @@
                 const team = p.t || 'none';
                 counts[team]++;
                 const cardClass = team === 'jolam' ? 'team-card-jolam' : (team === 'yumki' ? 'team-card-yumki' : 'team-card-none');
-                
                 const canManageJolam = state.role === 'master' || state.role === 'jolam';
                 const canManageYumki = state.role === 'master' || state.role === 'yumki';
 
                 return `
-                <div class="player-card ${cardClass} p-4 rounded-2xl flex flex-col justify-between h-32 relative">
+                <div class="player-card ${cardClass} p-4 rounded-2xl flex flex-col justify-between h-32 shadow-sm transition-all hover:shadow-md">
                     <div>
                         <span class="text-lg font-black text-slate-800 truncate block">${p.name}</span>
                         <span class="text-[10px] font-black italic text-slate-400 uppercase">HCP: ${p.h||0}</span>
                     </div>
                     <div class="flex gap-1 mt-auto">
-                        ${canManageJolam ? `<button onclick="window.setTeam('${p.id}', '${team === 'jolam' ? 'none' : 'jolam'}')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${team === 'jolam' ? 'bg-rose-600 text-white' : 'bg-white/80 border border-slate-200'}">JOLAM</button>` : ''}
-                        ${canManageYumki ? `<button onclick="window.setTeam('${p.id}', '${team === 'yumki' ? 'none' : 'yumki'}')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${team === 'yumki' ? 'bg-blue-600 text-white' : 'bg-white/80 border border-slate-200'}">YUMKI</button>` : ''}
+                        ${canManageJolam ? `<button onclick="window.setTeam('${p.id}', '${team === 'jolam' ? 'none' : 'jolam'}')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${team === 'jolam' ? 'bg-rose-600 text-white' : 'bg-white/80 border border-slate-200 shadow-sm'}">JOLAM</button>` : ''}
+                        ${canManageYumki ? `<button onclick="window.setTeam('${p.id}', '${team === 'yumki' ? 'none' : 'yumki'}')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${team === 'yumki' ? 'bg-blue-600 text-white' : 'bg-white/80 border border-slate-200 shadow-sm'}">YUMKI</button>` : ''}
                     </div>
                 </div>
             `}).join('');
@@ -292,25 +295,23 @@
         };
 
         const renderSponsors = () => {
-            // Full list in Hall section
             const fullList = document.getElementById('sponsor-list-full');
             if(fullList) {
                 fullList.innerHTML = state.sponsors.length ? state.sponsors.map(s => `
-                    <div class="bg-white rounded-3xl p-5 border border-slate-100 flex items-start gap-4">
+                    <div class="bg-white rounded-3xl p-5 border border-slate-100 flex items-start gap-4 shadow-sm">
                         <div class="p-3 bg-amber-50 text-amber-500 rounded-2xl border border-amber-100"><i data-lucide="gift" size="20"></i></div>
                         <div class="flex-1">
-                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-tighter mb-1">${s.user}</h4>
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-tighter mb-1">${s.user}님</h4>
                             <p class="text-base font-black text-slate-800 leading-tight">${s.item}</p>
                         </div>
-                        ${state.role === 'master' ? `<button onclick="window.deleteSponsor('${s.id}')" class="text-slate-300 hover:text-red-500"><i data-lucide="trash-2" size="14"></i></button>` : ''}
+                        ${state.role === 'master' ? `<button onclick="window.deleteSponsor('${s.id}')" class="text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="trash-2" size="14"></i></button>` : ''}
                     </div>
                 `).join('') : '<p class="text-slate-400 text-sm p-4">등록된 후원 내역이 없습니다.</p>';
             }
 
-            // Small widget in Home section
             const homeList = document.getElementById('home-sponsor-list');
             if(homeList) {
-                homeList.innerHTML = state.sponsors.length ? state.sponsors.slice(0, 5).map(s => `
+                homeList.innerHTML = state.sponsors.length ? state.sponsors.slice(0, 10).map(s => `
                     <div class="bg-white min-w-[140px] p-3 rounded-2xl border border-amber-200 shadow-sm flex flex-col gap-1">
                         <span class="text-[9px] font-black text-amber-600 uppercase tracking-tight">${s.user}님</span>
                         <span class="text-[11px] font-bold text-slate-800 line-clamp-1">${s.item}</span>
@@ -320,7 +321,37 @@
             if(window.lucide) window.lucide.createIcons();
         };
 
-        // Window Globals for UI events
+        // Window Handlers
+        window.changeView = (v) => {
+            if(v === 'register' && state.role !== 'master') {
+                alert('마스터 관리자만 접근 가능합니다.');
+                return;
+            }
+            state.view = v;
+            
+            // UI Toggle Logic
+            const sections = document.querySelectorAll('.view-section');
+            sections.forEach(s => {
+                if (s.id === `view-${v}`) {
+                    s.classList.add('active');
+                } else {
+                    s.classList.remove('active');
+                }
+            });
+
+            // Nav Highlight
+            const navs = document.querySelectorAll('.nav-link, nav button');
+            navs.forEach(n => {
+                if (n.id === `nav-${v}` || n.id === `m-nav-${v}`) {
+                    n.classList.add('active');
+                } else {
+                    n.classList.remove('active');
+                }
+            });
+
+            window.scrollTo(0,0);
+        };
+
         window.doLogin = () => {
             const pin = document.getElementById('admin-pw').value;
             if(ADMIN_PINS[pin]) {
@@ -334,17 +365,6 @@
         window.toggleAdminAuth = () => {
             if(state.role) { state.role = null; renderAll(); }
             else document.getElementById('admin-modal').classList.remove('hidden');
-        };
-
-        window.changeView = (v) => {
-            if(v === 'register' && state.role !== 'master') {
-                alert('마스터 관리자만 접근 가능합니다.');
-                return;
-            }
-            state.view = v;
-            document.querySelectorAll('.view-section').forEach(s => s.classList.toggle('active', s.id === `view-${v}`));
-            document.querySelectorAll('.nav-link').forEach(n => n.classList.toggle('active', n.id === `nav-${v}` || n.id === `m-nav-${v}`));
-            window.scrollTo(0,0);
         };
 
         window.addPlayer = async () => {
@@ -408,6 +428,11 @@
         });
 
         init();
+        
+        // Initial Icons
+        window.addEventListener('load', () => {
+            if(window.lucide) window.lucide.createIcons();
+        });
     </script>
 </body>
 </html>
