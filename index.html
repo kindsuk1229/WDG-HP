@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { 
   getFirestore, collection, doc, onSnapshot, 
   setDoc, updateDoc, addDoc, query, 
@@ -16,11 +16,21 @@ import {
   Megaphone, ExternalLink, Plus
 } from 'lucide-react';
 
-// --- Firebase Configuration ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// --- Firebase Safety Initialization ---
+let app, auth, db;
+try {
+  const firebaseConfig = JSON.parse(__firebase_config);
+  if (!getApps().length) {
+    app = initializeApp(firebaseConfig);
+  } else {
+    app = getApps()[0];
+  }
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (e) {
+  console.error("Firebase config error:", e);
+}
+
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'udonggol-s6-pro-v4';
 
 const INITIAL_PLAYERS = [
@@ -37,7 +47,7 @@ export default function App() {
   const [adminRole, setAdminRole] = useState(null);
   const [players, setPlayers] = useState([]);
   const [hallItems, setHallItems] = useState([]);
-  const [notice, setNotice] = useState({ text: "11:00 식사 후 13:10부터 순차적으로 티오프 진행합니다 (샤인데일 CC)", lastUpdated: null });
+  const [notice, setNotice] = useState({ text: "데이터를 불러오는 중...", lastUpdated: null });
   const [messages, setMessages] = useState([]);
   
   const [isEditingNotice, setIsEditingNotice] = useState(false);
@@ -51,38 +61,48 @@ export default function App() {
 
   const chatEndRef = useRef(null);
 
+  // 1. Auth Logic (Rule 3)
   useEffect(() => {
     const initAuth = async () => {
+      if (!auth) return;
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
           await signInAnonymously(auth);
         }
-      } catch (error) { console.error("Auth error:", error); }
+      } catch (error) { 
+        console.error("Auth error:", error); 
+      }
     };
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsubscribe();
   }, []);
 
+  // 2. Data Fetching (Rule 1 & 2)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
+    
     const publicPath = (col) => collection(db, 'artifacts', appId, 'public', 'data', col);
 
-    const unsubNotice = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
+    const unsubNotice = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
         setNotice(data);
         setNewNoticeText(data.text);
+      } else {
+        setNotice({ text: "11:00 식사 후 13:10부터 순차적으로 티오프 진행합니다 (샤인데일 CC)", lastUpdated: Date.now() });
       }
-    });
+    }, (err) => console.error("Notice error:", err));
 
     const unsubPlayers = onSnapshot(publicPath('players'), (snapshot) => {
       const playerList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (playerList.length === 0) {
         INITIAL_PLAYERS.forEach((name, idx) => {
-          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', `p${idx}`), { name, team: null, handicap: 0 });
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', `p${idx}`), { 
+            name, team: null, handicap: 0 
+          });
         });
       } else {
         const sorted = [...playerList].sort((a, b) => {
@@ -92,22 +112,25 @@ export default function App() {
         });
         setPlayers(sorted);
       }
-    });
+    }, (err) => console.error("Players error:", err));
 
     const unsubHall = onSnapshot(publicPath('hall'), (snapshot) => {
       setHallItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => console.error("Hall error:", err));
 
     const unsubChat = onSnapshot(publicPath('chats'), (snapshot) => {
       const msgList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMessages(msgList.sort((a, b) => a.timestamp - b.timestamp));
-    });
+      setMessages(msgList.sort((a, b) => a.timestamp - b.timestamp).slice(-50));
+    }, (err) => console.error("Chat error:", err));
 
     return () => { unsubNotice(); unsubPlayers(); unsubHall(); unsubChat(); };
   }, [user]);
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, view]);
+  useEffect(() => { 
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
+  }, [messages, view]);
 
+  // Logic Helpers
   const teamStats = useMemo(() => {
     const jolam = players.filter(p => p.team === 'jolam');
     const yumki = players.filter(p => p.team === 'yumki');
@@ -134,6 +157,7 @@ export default function App() {
   };
 
   const updateNotice = async () => {
+    if (!adminRole) return;
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), {
       text: newNoticeText,
       lastUpdated: Date.now()
@@ -145,14 +169,11 @@ export default function App() {
     if (!adminRole) return;
     const player = players.find(p => p.id === id);
     if (!player) return;
-
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { team });
-
     if (team) {
-      const teamName = team === 'jolam' ? '팀 조람' : '팀 염기';
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), {
         user: "SYSTEM",
-        text: `📢 [${adminRole}] ${player.name} 선수가 ${teamName}에 지명되었습니다!`,
+        text: `📢 [${adminRole}] ${player.name} 선수가 ${team === 'jolam' ? '팀 조람' : '팀 염기'}에 지명되었습니다!`,
         timestamp: Date.now(),
         time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
         uid: "system-bot"
@@ -194,13 +215,13 @@ export default function App() {
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'hall', id));
   };
 
+  // --- Sub-components ---
   const PlayerCard = ({ p, isPool = false }) => (
     <div className={`p-3 rounded-2xl border transition-all ${p.team === 'jolam' ? 'bg-pink-50 border-pink-200' : p.team === 'yumki' ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 shadow-sm'}`}>
       <div className="flex justify-between items-center">
         <div className="flex-1">
           <div className="flex items-center gap-1.5">
             <span className="font-black text-slate-800 text-[14px]">{p.name}</span>
-            {/* 핸디캡: 관리자이거나, 이미 팀에 소속된 선수만 표시 (isPool일 때 일반 유저는 못봄) */}
             {(adminRole || (!isPool && p.team)) && (
               <div className="bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                 <span className="text-[9px] font-black text-slate-500">H.{p.handicap || 0}</span>
@@ -219,8 +240,8 @@ export default function App() {
         <div className="space-y-1.5 mt-2 pt-2 border-t border-slate-100">
           {!p.team && (
             <div className="flex gap-1">
-              <button onClick={() => assignTeam(p.id, 'jolam')} className="flex-1 bg-pink-500 text-white py-1 rounded-lg text-[9px] font-bold uppercase">Jolam</button>
-              <button onClick={() => assignTeam(p.id, 'yumki')} className="flex-1 bg-blue-600 text-white py-1 rounded-lg text-[9px] font-bold uppercase">Yumki</button>
+              <button onClick={() => assignTeam(p.id, 'jolam')} className="flex-1 bg-pink-500 text-white py-1 rounded-lg text-[9px] font-bold">JOLAM</button>
+              <button onClick={() => assignTeam(p.id, 'yumki')} className="flex-1 bg-blue-600 text-white py-1 rounded-lg text-[9px] font-bold">YUMKI</button>
             </div>
           )}
           <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1">
@@ -237,76 +258,94 @@ export default function App() {
     </div>
   );
 
+  if (!user) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
+        <div className="text-center animate-pulse">
+          <div className="font-black text-2xl text-green-600 mb-2 italic tracking-tighter">UDONGGOL</div>
+          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest">Connecting to Season 6...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row pb-20 md:pb-0">
       {/* Sidebar Navigation */}
       <nav className="hidden md:flex fixed left-0 top-0 h-full w-20 bg-white border-r border-slate-200 flex-col items-center py-10 gap-8 z-50">
         <div className="font-black text-green-600 text-xl italic mb-4">UDG</div>
-        <button onClick={() => setView('home')} className={`p-3 rounded-2xl ${view === 'home' ? 'bg-green-600 text-white' : 'text-slate-400'}`}><Home size={24}/></button>
-        <button onClick={() => setView('draft')} className={`p-3 rounded-2xl ${view === 'draft' ? 'bg-green-600 text-white' : 'text-slate-400'}`}><Users size={24}/></button>
-        <button onClick={() => setView('hall')} className={`p-3 rounded-2xl ${view === 'hall' ? 'bg-green-600 text-white' : 'text-slate-400'}`}><Trophy size={24}/></button>
+        <button onClick={() => setView('home')} className={`p-3 rounded-2xl ${view === 'home' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Home size={24}/></button>
+        <button onClick={() => setView('draft')} className={`p-3 rounded-2xl ${view === 'draft' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Users size={24}/></button>
+        <button onClick={() => setView('hall')} className={`p-3 rounded-2xl ${view === 'hall' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Trophy size={24}/></button>
         <button onClick={() => adminRole ? setAdminRole(null) : setShowAdminModal(true)} className="mt-auto p-3 rounded-2xl bg-slate-100 text-slate-400">
           {adminRole ? <Unlock size={22} className="text-slate-900"/> : <Lock size={22}/>}
         </button>
       </nav>
 
       {/* Mobile Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex items-center justify-around py-3 z-50">
-        <button onClick={() => setView('home')} className={`flex flex-col items-center ${view === 'home' ? 'text-green-600' : 'text-slate-400'}`}><Home size={20}/><span className="text-[9px]">Home</span></button>
-        <button onClick={() => setView('draft')} className={`flex flex-col items-center ${view === 'draft' ? 'text-green-600' : 'text-slate-400'}`}><Users size={20}/><span className="text-[9px]">Draft</span></button>
-        <button onClick={() => setView('hall')} className={`flex flex-col items-center ${view === 'hall' ? 'text-green-600' : 'text-slate-400'}`}><Trophy size={20}/><span className="text-[9px]">Hall</span></button>
-        <button onClick={() => adminRole ? setAdminRole(null) : setShowAdminModal(true)} className="flex flex-col items-center text-slate-400"><Lock size={20}/><span className="text-[9px]">Admin</span></button>
+      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex items-center justify-around py-3 z-50 px-2">
+        <button onClick={() => setView('home')} className={`flex flex-col items-center flex-1 ${view === 'home' ? 'text-green-600' : 'text-slate-400'}`}><Home size={20}/><span className="text-[9px] font-bold">홈</span></button>
+        <button onClick={() => setView('draft')} className={`flex flex-col items-center flex-1 ${view === 'draft' ? 'text-green-600' : 'text-slate-400'}`}><Users size={20}/><span className="text-[9px] font-bold">드래프트</span></button>
+        <button onClick={() => setView('hall')} className={`flex flex-col items-center flex-1 ${view === 'hall' ? 'text-green-600' : 'text-slate-400'}`}><Trophy size={20}/><span className="text-[9px] font-bold">명예의전당</span></button>
+        <button onClick={() => adminRole ? setAdminRole(null) : setShowAdminModal(true)} className={`flex flex-col items-center flex-1 ${adminRole ? 'text-slate-900' : 'text-slate-400'}`}><Lock size={20}/><span className="text-[9px] font-bold">관리자</span></button>
       </nav>
 
-      <main className="flex-1 md:ml-20 p-4 md:p-10 pb-24 max-w-7xl mx-auto w-full">
+      <main className="flex-1 md:ml-20 p-4 md:p-10 max-w-7xl mx-auto w-full overflow-x-hidden">
         {view === 'home' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <header>
               <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black inline-flex items-center gap-2 mb-4 uppercase">
-                <Calendar size={12}/> 2026. 03. 29 · GOLF TOURNAMENT
+                <Calendar size={12}/> 2026. 03. 29 · SHINEDALE CC
               </div>
-              <h1 className="text-5xl md:text-8xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">
+              <h1 className="text-5xl md:text-8xl font-black text-slate-900 uppercase italic tracking-tighter leading-none mb-2">
                 UDONGGOL <br/><span className="text-green-600">SEASON 6</span>
               </h1>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-slate-900 rounded-[32px] p-8 text-white relative overflow-hidden">
-                <div className="relative z-10">
+                <div className="relative z-10 h-full flex flex-col">
                   <div className="flex justify-between items-center mb-6">
-                    <div className="bg-green-500 p-2 rounded-xl"><Megaphone size={20}/></div>
-                    {adminRole && <button onClick={() => setIsEditingNotice(true)} className="text-white/40"><Edit3 size={18}/></button>}
+                    <div className="bg-green-500 p-2 rounded-xl text-white"><Megaphone size={20}/></div>
+                    {adminRole && <button onClick={() => setIsEditingNotice(true)} className="text-white/40 hover:text-white transition-colors"><Edit3 size={18}/></button>}
                   </div>
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Announcement</div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">공지사항</div>
                   {isEditingNotice ? (
                     <div className="space-y-3">
-                      <textarea className="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-sm outline-none" value={newNoticeText} onChange={e=>setNewNoticeText(e.target.value)} rows="3"/>
+                      <textarea className="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-sm outline-none focus:border-green-500" value={newNoticeText} onChange={e=>setNewNoticeText(e.target.value)} rows="3"/>
                       <div className="flex gap-2">
-                        <button onClick={updateNotice} className="bg-green-600 px-4 py-2 rounded-lg text-xs font-bold">Save</button>
-                        <button onClick={()=>setIsEditingNotice(false)} className="bg-white/10 px-4 py-2 rounded-lg text-xs font-bold">Cancel</button>
+                        <button onClick={updateNotice} className="bg-green-600 px-4 py-2 rounded-lg text-xs font-bold">저장</button>
+                        <button onClick={()=>setIsEditingNotice(false)} className="bg-white/10 px-4 py-2 rounded-lg text-xs font-bold">취소</button>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xl md:text-2xl font-bold leading-tight">{notice.text}</p>
+                    <p className="text-xl md:text-2xl font-bold leading-tight flex-grow">{notice.text}</p>
                   )}
+                  <div className="text-[10px] text-slate-600 mt-6 italic uppercase font-medium">Last update: {notice.lastUpdated ? new Date(notice.lastUpdated).toLocaleDateString() : 'N/A'}</div>
                 </div>
               </div>
 
               <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm space-y-6">
-                <h3 className="font-black uppercase italic text-slate-400 text-xs">Tournament Stats</h3>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500"><Coins size={24}/></div>
-                  <div>
-                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Support</div>
-                    <div className="text-2xl font-black">{donationStats.cash} <span className="text-xs">원</span></div>
+                <h3 className="font-black uppercase italic text-slate-400 text-xs">Tournament Info</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500"><Coins size={24}/></div>
+                    <div>
+                      <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">후원금 총액</div>
+                      <div className="text-2xl font-black">{donationStats.cash} <span className="text-xs">원</span></div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center text-purple-500"><Gift size={24}/></div>
+                    <div>
+                      <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">협찬 물품</div>
+                      <div className="text-2xl font-black">{donationStats.items} <span className="text-xs">개</span></div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center text-purple-500"><Gift size={24}/></div>
-                  <div>
-                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sponsored Items</div>
-                    <div className="text-2xl font-black">{donationStats.items} <span className="text-xs">개</span></div>
-                  </div>
+                <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-slate-400 text-xs font-bold">
+                   <div className="flex items-center gap-2"><MapPin size={14}/> 샤인데일 CC</div>
+                   <div className="flex items-center gap-2"><Clock size={14}/> 13:10 T-OFF</div>
                 </div>
               </div>
             </div>
@@ -315,60 +354,66 @@ export default function App() {
 
         {view === 'draft' && (
           <div className="space-y-6 animate-in fade-in duration-500">
-             <header className="flex justify-between items-end border-b border-slate-200 pb-6">
-               <h2 className="text-4xl font-black uppercase italic">Draft Board</h2>
-               <div className="flex gap-4">
-                 <div className="bg-pink-100 px-4 py-2 rounded-2xl text-center border border-pink-200 min-w-[100px]">
-                   <div className="text-[8px] font-black text-pink-600 uppercase">Team Jolam</div>
+             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-slate-200 pb-6 gap-4">
+               <h2 className="text-4xl font-black uppercase italic tracking-tighter">Draft Board</h2>
+               <div className="flex gap-2 w-full sm:w-auto">
+                 <div className="flex-1 bg-pink-100 px-4 py-2 rounded-2xl text-center border border-pink-200 min-w-[100px]">
+                   <div className="text-[8px] font-black text-pink-600 uppercase">Team Jolam H</div>
                    <div className="text-xl font-black text-pink-700">{teamStats.jolam.hcapSum}</div>
                  </div>
-                 <div className="bg-blue-100 px-4 py-2 rounded-2xl text-center border border-blue-200 min-w-[100px]">
-                   <div className="text-[8px] font-black text-blue-600 uppercase">Team Yumki</div>
+                 <div className="flex-1 bg-blue-100 px-4 py-2 rounded-2xl text-center border border-blue-200 min-w-[100px]">
+                   <div className="text-[8px] font-black text-blue-600 uppercase">Team Yumki H</div>
                    <div className="text-xl font-black text-blue-700">{teamStats.yumki.hcapSum}</div>
                  </div>
                </div>
              </header>
 
              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+               {/* Team Lists */}
                <div className="lg:col-span-4 space-y-4">
-                 <div className="bg-pink-50 p-6 rounded-[32px] border border-pink-100">
-                    <h3 className="text-[10px] font-black text-pink-500 uppercase mb-4">TEAM JOLAM ({teamStats.jolam.count})</h3>
+                 <div className="bg-pink-50/50 p-6 rounded-[32px] border border-pink-100">
+                    <h3 className="text-[10px] font-black text-pink-500 uppercase mb-4 tracking-widest flex items-center justify-between">
+                      TEAM JOLAM <span>{teamStats.jolam.count} Players</span>
+                    </h3>
                     <div className="grid grid-cols-2 gap-2">
                       {players.filter(p=>p.team==='jolam').map(p => <PlayerCard key={p.id} p={p} />)}
                     </div>
                  </div>
-                 <div className="bg-blue-50 p-6 rounded-[32px] border border-blue-100">
-                    <h3 className="text-[10px] font-black text-blue-500 uppercase mb-4">TEAM YUMKI ({teamStats.yumki.count})</h3>
+                 <div className="bg-blue-50/50 p-6 rounded-[32px] border border-blue-100">
+                    <h3 className="text-[10px] font-black text-blue-500 uppercase mb-4 tracking-widest flex items-center justify-between">
+                      TEAM YUMKI <span>{teamStats.yumki.count} Players</span>
+                    </h3>
                     <div className="grid grid-cols-2 gap-2">
                       {players.filter(p=>p.team==='yumki').map(p => <PlayerCard key={p.id} p={p} />)}
                     </div>
                  </div>
                </div>
 
+               {/* Draft Pool */}
                <div className="lg:col-span-4 bg-slate-100 p-6 rounded-[32px] border border-slate-200">
-                 <h3 className="text-[10px] font-black text-slate-500 uppercase mb-4">DRAFT POOL</h3>
-                 <div className="grid grid-cols-2 gap-2">
-                   {/* isPool={true} 를 넘겨서 일반 유저에게는 핸디캡을 숨깁니다. */}
+                 <h3 className="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">DRAFT POOL ({players.filter(p=>!p.team).length})</h3>
+                 <div className="grid grid-cols-2 gap-2 h-[400px] lg:h-[600px] overflow-y-auto scrollbar-hide content-start pb-10">
                    {players.filter(p=>!p.team).map(p => <PlayerCard key={p.id} p={p} isPool={true} />)}
                  </div>
                </div>
 
-               <div className="lg:col-span-4 bg-slate-900 p-6 rounded-[32px] text-white flex flex-col h-[500px]">
-                 <h3 className="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">LIVE UPDATE</h3>
+               {/* Chat Section */}
+               <div className="lg:col-span-4 bg-slate-900 p-6 rounded-[32px] text-white flex flex-col h-[500px] lg:h-auto">
+                 <h3 className="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">LIVE CHAT</h3>
                  <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-1 scrollbar-hide">
                     {messages.map(m => (
                       <div key={m.id} className={`flex flex-col ${m.uid === user?.uid ? 'items-end' : 'items-start'}`}>
-                        <div className={`px-4 py-2 rounded-2xl text-[12px] ${m.user === 'SYSTEM' ? 'bg-white/5 border border-white/10 text-green-400 italic' : (m.uid === user?.uid ? 'bg-green-600' : 'bg-slate-800')}`}>
+                        <div className={`px-4 py-2 rounded-2xl text-[12px] max-w-[85%] ${m.user === 'SYSTEM' ? 'bg-white/5 border border-white/10 text-green-400 italic' : (m.uid === user?.uid ? 'bg-green-600 shadow-lg' : 'bg-slate-800')}`}>
                           {m.text}
                         </div>
-                        <span className="text-[8px] text-slate-500 mt-1 uppercase">{m.user} · {m.time}</span>
+                        <span className="text-[8px] text-slate-500 mt-1 uppercase px-1">{m.user} · {m.time}</span>
                       </div>
                     ))}
                     <div ref={chatEndRef} />
                  </div>
                  <form onSubmit={handleSendChat} className="flex gap-2">
-                   <input className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-xs outline-none" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Message..."/>
-                   <button className="bg-green-600 p-2 rounded-xl"><Send size={16}/></button>
+                   <input className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-xs outline-none focus:border-green-500" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="실시간 응원 메시지..."/>
+                   <button className="bg-green-600 p-3 rounded-xl hover:bg-green-500 transition-colors shadow-lg"><Send size={18}/></button>
                  </form>
                </div>
              </div>
@@ -378,32 +423,34 @@ export default function App() {
         {view === 'hall' && (
           <div className="space-y-8 animate-in fade-in duration-500">
             <header className="flex justify-between items-center">
-              <h2 className="text-4xl font-black uppercase italic">Hall of Fame</h2>
-              <button onClick={()=>setIsAddingHall(true)} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2"><Plus size={16}/> Add New</button>
+              <h2 className="text-4xl font-black uppercase italic tracking-tighter">Hall of Fame</h2>
+              <button onClick={()=>setIsAddingHall(true)} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-all"><Plus size={16}/> 등록하기</button>
             </header>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-[32px] p-8 border border-slate-200">
-                <h3 className="text-xs font-black uppercase mb-6 flex items-center gap-2 text-amber-500"><Coins size={16}/> Cash Support</h3>
+              <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm">
+                <h3 className="text-xs font-black uppercase mb-6 flex items-center gap-2 text-amber-500"><Coins size={16}/> 후원금 내역</h3>
                 <div className="space-y-3">
+                  {hallItems.filter(i=>i.type==='cash').length === 0 && <div className="text-slate-300 text-xs italic py-10 text-center font-bold">아직 후원 내역이 없습니다.</div>}
                   {hallItems.filter(i=>i.type==='cash').map(item => (
-                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl">
+                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-amber-200 transition-colors">
                       <span className="font-bold">{item.name}</span>
                       <div className="flex items-center gap-3">
-                        <span className="font-black">{Number(item.amount).toLocaleString()}원</span>
+                        <span className="font-black text-amber-600">{Number(item.amount).toLocaleString()}원</span>
                         {adminRole && <button onClick={()=>deleteHallItem(item.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button>}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="bg-white rounded-[32px] p-8 border border-slate-200">
-                <h3 className="text-xs font-black uppercase mb-6 flex items-center gap-2 text-purple-500"><Gift size={16}/> Sponsored Items</h3>
+              <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm">
+                <h3 className="text-xs font-black uppercase mb-6 flex items-center gap-2 text-purple-500"><Gift size={16}/> 협찬 물품 내역</h3>
                 <div className="space-y-3">
+                  {hallItems.filter(i=>i.type==='item').length === 0 && <div className="text-slate-300 text-xs italic py-10 text-center font-bold">아직 협찬 내역이 없습니다.</div>}
                   {hallItems.filter(i=>i.type==='item').map(item => (
-                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl">
+                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-purple-200 transition-colors">
                       <div>
                         <div className="font-bold">{item.name}</div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">{item.item}</div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{item.item}</div>
                       </div>
                       {adminRole && <button onClick={()=>deleteHallItem(item.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button>}
                     </div>
@@ -415,37 +462,37 @@ export default function App() {
         )}
       </main>
 
-      {/* Modals */}
+      {/* --- Modals --- */}
       {showAdminModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-          <div className="bg-white rounded-[32px] p-8 w-full max-w-xs text-center shadow-2xl">
-            <Shield size={32} className="mx-auto mb-4"/>
-            <h2 className="font-black uppercase italic mb-4">Admin Login</h2>
-            <input type="password" value={adminPassword} onChange={e=>setAdminPassword(e.target.value)} onKeyPress={e=>e.key==='Enter' && handleAdminLogin()} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-center text-xl outline-none mb-4" placeholder="••••"/>
-            <button onClick={handleAdminLogin} className="w-full bg-slate-900 text-white rounded-xl py-3 text-xs font-black uppercase mb-2 tracking-widest">Login</button>
-            <button onClick={()=>setShowAdminModal(false)} className="text-slate-300 text-[9px] uppercase font-black">Close</button>
+          <div className="bg-white rounded-[32px] p-8 w-full max-w-xs text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <Shield size={32} className="mx-auto mb-4 text-green-600"/>
+            <h2 className="font-black uppercase italic mb-4">Admin Access</h2>
+            <input type="password" value={adminPassword} onChange={e=>setAdminPassword(e.target.value)} onKeyPress={e=>e.key==='Enter' && handleAdminLogin()} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-center text-xl outline-none mb-4 focus:border-green-500" placeholder="••••" autoFocus/>
+            <button onClick={handleAdminLogin} className="w-full bg-slate-900 text-white rounded-xl py-3 text-xs font-black uppercase mb-2 tracking-widest hover:bg-slate-800">로그인</button>
+            <button onClick={()=>setShowAdminModal(false)} className="text-slate-300 text-[9px] uppercase font-black hover:text-slate-400 transition-colors">닫기</button>
           </div>
         </div>
       )}
 
       {isAddingHall && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-          <div className="bg-white rounded-[32px] p-10 w-full max-w-sm shadow-2xl">
-            <h2 className="text-xl font-black italic uppercase mb-6">New Contribution</h2>
+          <div className="bg-white rounded-[32px] p-10 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+            <h2 className="text-xl font-black italic uppercase mb-6 flex items-center gap-2">내역 추가</h2>
             <div className="space-y-4">
               <div className="flex bg-slate-100 p-1 rounded-xl">
-                <button onClick={()=>setNewHallItem({...newHallItem, type:'cash'})} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase ${newHallItem.type==='cash' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400'}`}>Cash</button>
-                <button onClick={()=>setNewHallItem({...newHallItem, type:'item'})} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase ${newHallItem.type==='item' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-400'}`}>Item</button>
+                <button onClick={()=>setNewHallItem({...newHallItem, type:'cash'})} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${newHallItem.type==='cash' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400'}`}>현금 후원</button>
+                <button onClick={()=>setNewHallItem({...newHallItem, type:'item'})} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${newHallItem.type==='item' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-400'}`}>물품 협찬</button>
               </div>
-              <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none" placeholder="이름" value={newHallItem.name} onChange={e=>setNewHallItem({...newHallItem, name:e.target.value})}/>
+              <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:border-green-500" placeholder="성함 (또는 팀명)" value={newHallItem.name} onChange={e=>setNewHallItem({...newHallItem, name:e.target.value})}/>
               {newHallItem.type === 'cash' ? (
-                <input type="number" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none" placeholder="금액" value={newHallItem.amount} onChange={e=>setNewHallItem({...newHallItem, amount:e.target.value})}/>
+                <input type="number" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:border-green-500" placeholder="후원 금액 (숫자만)" value={newHallItem.amount} onChange={e=>setNewHallItem({...newHallItem, amount:e.target.value})}/>
               ) : (
-                <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none" placeholder="물품" value={newHallItem.item} onChange={e=>setNewHallItem({...newHallItem, item:e.target.value})}/>
+                <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:border-green-500" placeholder="협찬 물품명" value={newHallItem.item} onChange={e=>setNewHallItem({...newHallItem, item:e.target.value})}/>
               )}
               <div className="flex gap-2 pt-4">
-                <button onClick={addHallItem} className="flex-1 bg-slate-900 text-white rounded-xl py-4 text-xs font-black uppercase">Add</button>
-                <button onClick={()=>setIsAddingHall(false)} className="px-6 bg-slate-100 text-slate-400 rounded-xl text-xs font-black uppercase">Cancel</button>
+                <button onClick={addHallItem} className="flex-1 bg-slate-900 text-white rounded-xl py-4 text-xs font-black uppercase hover:bg-slate-800 shadow-lg">추가하기</button>
+                <button onClick={()=>setIsAddingHall(false)} className="px-6 bg-slate-100 text-slate-400 rounded-xl text-xs font-black uppercase hover:bg-slate-200">취소</button>
               </div>
             </div>
           </div>
@@ -457,6 +504,11 @@ export default function App() {
         body { font-family: 'Pretendard', sans-serif; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slide-in-from-bottom-4 { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-in { animation-duration: 0.3s; animation-fill-mode: both; }
+        .fade-in { animation-name: fade-in; }
+        .slide-in-from-bottom-4 { animation-name: slide-in-from-bottom-4; }
       `}</style>
     </div>
   );
