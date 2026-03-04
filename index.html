@@ -12,7 +12,8 @@ import {
   Home, Users, Trophy, Lock, Unlock, 
   Send, Trash2, Edit3, Check, X, 
   Calendar, Utensils, Clock, MapPin, 
-  HeartHandshake, Coins, Gift, Shield 
+  HeartHandshake, Coins, Gift, Shield, ChevronRight, Hash,
+  Megaphone, ExternalLink, Plus
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -20,7 +21,7 @@ const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'udonggol-s6-final';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'udonggol-s6-pro-v4';
 
 const INITIAL_PLAYERS = [
   "영빈", "밤또", "낭빠", "비락", "벙커", "찐", "늘보", "호이서", "고들빠", "윤샷", 
@@ -36,18 +37,20 @@ export default function App() {
   const [adminRole, setAdminRole] = useState(null);
   const [players, setPlayers] = useState([]);
   const [hallItems, setHallItems] = useState([]);
-  const [notice, setNotice] = useState({ text: "데이터 로딩 중...", lastUpdated: null });
+  const [notice, setNotice] = useState({ text: "11:00 식사 후 13:10부터 순차적으로 티오프 진행합니다 (샤인데일 CC)", lastUpdated: null });
   const [messages, setMessages] = useState([]);
   
   const [isEditingNotice, setIsEditingNotice] = useState(false);
+  const [newNoticeText, setNewNoticeText] = useState("");
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [chatInput, setChatInput] = useState('');
-  const [newItem, setNewItem] = useState({ name: '', detail: '', type: 'item', amount: 0 });
   
+  const [isAddingHall, setIsAddingHall] = useState(false);
+  const [newHallItem, setNewHallItem] = useState({ name: '', amount: '', type: 'cash', item: '' });
+
   const chatEndRef = useRef(null);
 
-  // Auth (Rule 3)
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -56,30 +59,39 @@ export default function App() {
         } else {
           await signInAnonymously(auth);
         }
-      } catch (error) {}
+      } catch (error) { console.error("Auth error:", error); }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
 
-  // Firestore Listeners (Rule 1 & 2)
   useEffect(() => {
     if (!user) return;
     const publicPath = (col) => collection(db, 'artifacts', appId, 'public', 'data', col);
 
     const unsubNotice = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), (doc) => {
-      if (doc.exists()) setNotice(doc.data());
-      else setDoc(doc.ref, { text: "대회 전 식당에서 단체 식사를 진행합니다. 시간을 엄수해 주세요!", lastUpdated: Date.now() });
+      if (doc.exists()) {
+        const data = doc.data();
+        setNotice(data);
+        setNewNoticeText(data.text);
+      }
     });
 
     const unsubPlayers = onSnapshot(publicPath('players'), (snapshot) => {
       const playerList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (playerList.length === 0) {
         INITIAL_PLAYERS.forEach((name, idx) => {
-          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', `p${idx}`), { name, team: null });
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', `p${idx}`), { name, team: null, handicap: 0 });
         });
-      } else setPlayers(playerList);
+      } else {
+        const sorted = [...playerList].sort((a, b) => {
+          const hA = Number(a.handicap) || 0;
+          const hB = Number(b.handicap) || 0;
+          return hA - hB || a.name.localeCompare(b.name);
+        });
+        setPlayers(sorted);
+      }
     });
 
     const unsubHall = onSnapshot(publicPath('hall'), (snapshot) => {
@@ -94,7 +106,16 @@ export default function App() {
     return () => { unsubNotice(); unsubPlayers(); unsubHall(); unsubChat(); };
   }, [user]);
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, view]);
+
+  const teamStats = useMemo(() => {
+    const jolam = players.filter(p => p.team === 'jolam');
+    const yumki = players.filter(p => p.team === 'yumki');
+    return {
+      jolam: { count: jolam.length, hcapSum: jolam.reduce((sum, p) => sum + (Number(p.handicap) || 0), 0) },
+      yumki: { count: yumki.length, hcapSum: yumki.reduce((sum, p) => sum + (Number(p.handicap) || 0), 0) }
+    };
+  }, [players]);
 
   const donationStats = useMemo(() => {
     const cashTotal = hallItems
@@ -112,34 +133,60 @@ export default function App() {
     setAdminPassword('');
   };
 
-  const updateNoticeInDb = async () => {
-    if (!adminRole) return;
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), { text: notice.text, lastUpdated: Date.now() });
+  const updateNotice = async () => {
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), {
+      text: newNoticeText,
+      lastUpdated: Date.now()
+    });
     setIsEditingNotice(false);
+  };
+
+  const addHallItem = async () => {
+    if (!newHallItem.name) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'hall'), {
+      ...newHallItem,
+      amount: Number(newHallItem.amount) || 0,
+      timestamp: Date.now()
+    });
+    setNewHallItem({ name: '', amount: '', type: 'cash', item: '' });
+    setIsAddingHall(false);
+  };
+
+  const deleteHallItem = async (id) => {
+    if (!adminRole) return;
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'hall', id));
   };
 
   const assignTeam = async (id, team) => {
     if (!adminRole) return;
+    const player = players.find(p => p.id === id);
+    if (!player) return;
+
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { team });
-    const playerName = players.find(p => p.id === id).name;
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), {
-      user: 'SYSTEM',
-      text: `${playerName}님이 ${team === 'jolam' ? '졸람' : '염키'} 팀에 합류했습니다!`,
-      timestamp: Date.now(),
-      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-    });
+
+    // 자동 중계 시스템
+    if (team) {
+      const teamName = team === 'jolam' ? '팀 조람' : '팀 염기';
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), {
+        user: "SYSTEM",
+        text: `📢 [${adminRole}] ${player.name} 선수가 ${teamName}에 지명되었습니다!`,
+        timestamp: Date.now(),
+        time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+        uid: "system-bot"
+      });
+    }
   };
 
-  const removeFromTeam = async (id) => {
+  const updateHandicap = async (id, val) => {
     if (!adminRole) return;
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { team: null });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { handicap: Number(val) || 0 });
   };
 
   const handleSendChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim() || !user) return;
     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), {
-      user: adminRole || "익명",
+      user: adminRole || "참가자",
       text: chatInput,
       timestamp: Date.now(),
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
@@ -148,163 +195,276 @@ export default function App() {
     setChatInput('');
   };
 
+  const PlayerCard = ({ p, showHandicapAlways = false }) => (
+    <div className={`p-3 rounded-2xl border transition-all ${p.team === 'jolam' ? 'bg-pink-50 border-pink-200 shadow-sm' : p.team === 'yumki' ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-200 shadow-sm'}`}>
+      <div className="flex justify-between items-center">
+        <div className="flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className={`font-black text-slate-800 ${showHandicapAlways || adminRole ? 'text-[14px]' : 'text-[15px]'}`}>{p.name}</span>
+            {(showHandicapAlways || adminRole) && (
+              <div className="bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                <span className="text-[9px] font-black text-slate-500">H.{p.handicap || 0}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        {adminRole && p.team && (
+          <button onClick={() => assignTeam(p.id, null)} className="text-slate-300 hover:text-red-500 transition-colors">
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      
+      {adminRole && (
+        <div className="space-y-1.5 mt-2 pt-2 border-t border-slate-100">
+          {!p.team && (
+            <div className="flex gap-1">
+              <button onClick={() => assignTeam(p.id, 'jolam')} className="flex-1 bg-pink-500 text-white py-1 rounded-lg text-[9px] font-bold uppercase shadow-sm">Jolam</button>
+              <button onClick={() => assignTeam(p.id, 'yumki')} className="flex-1 bg-blue-600 text-white py-1 rounded-lg text-[9px] font-bold uppercase shadow-sm">Yumki</button>
+            </div>
+          )}
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1">
+            <span className="text-[8px] font-bold text-slate-400 uppercase mr-1">H</span>
+            <input 
+              type="number" 
+              className="w-full text-[11px] font-black outline-none bg-transparent"
+              defaultValue={p.handicap}
+              onBlur={(e) => updateHandicap(p.id, e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-green-100 overflow-x-hidden">
-      {/* Sidebar Navigation (Desktop) */}
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col md:flex-row">
+      {/* Sidebar Navigation */}
       <nav className="hidden md:flex fixed left-0 top-0 h-full w-20 bg-white border-r border-slate-200 flex-col items-center py-10 gap-8 z-50">
-        <button onClick={() => setView('home')} className={`p-3 rounded-2xl transition-all ${view === 'home' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>
-          <Home size={28} />
+        <div className="font-black text-green-600 text-xl mb-4 italic">UDG</div>
+        <button onClick={() => setView('home')} className={`p-3 rounded-2xl transition-all ${view === 'home' ? 'bg-green-600 text-white shadow-xl' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
+          <Home size={24} />
         </button>
-        <button onClick={() => setView('draft')} className={`p-3 rounded-2xl transition-all ${view === 'draft' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>
-          <Users size={28} />
+        <button onClick={() => setView('draft')} className={`p-3 rounded-2xl transition-all ${view === 'draft' ? 'bg-green-600 text-white shadow-xl' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
+          <Users size={24} />
         </button>
-        <button onClick={() => setView('hall')} className={`p-3 rounded-2xl transition-all ${view === 'hall' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>
-          <Trophy size={28} />
+        <button onClick={() => setView('hall')} className={`p-3 rounded-2xl transition-all ${view === 'hall' ? 'bg-green-600 text-white shadow-xl' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
+          <Trophy size={24} />
         </button>
-        <div className="mt-auto">
-          <button onClick={() => adminRole ? setAdminRole(null) : setShowAdminModal(true)} className={`p-3 rounded-2xl transition-all ${adminRole ? 'bg-black text-white' : 'bg-slate-100 text-slate-400'}`}>
-            {adminRole ? <Unlock size={24} /> : <Lock size={24} />}
+        <div className="mt-auto pb-6">
+          <button onClick={() => adminRole ? setAdminRole(null) : setShowAdminModal(true)} className={`p-3 rounded-2xl transition-all ${adminRole ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'}`}>
+            {adminRole ? <Unlock size={22} /> : <Lock size={22} />}
           </button>
         </div>
       </nav>
 
-      {/* Bottom Navigation (Mobile) */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 flex items-center justify-around py-4 z-50 px-4">
-        <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 ${view === 'home' ? 'text-green-600' : 'text-slate-400'}`}>
-          <Home size={24} />
-          <span className="text-[10px] font-bold">홈</span>
+      {/* Mobile Nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex items-center justify-around py-3 z-50 px-2 shadow-2xl">
+        <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 flex-1 ${view === 'home' ? 'text-green-600 font-black' : 'text-slate-400 font-bold'}`}>
+          <Home size={20} />
+          <span className="text-[10px] uppercase">Home</span>
         </button>
-        <button onClick={() => setView('draft')} className={`flex flex-col items-center gap-1 ${view === 'draft' ? 'text-green-600' : 'text-slate-400'}`}>
-          <Users size={24} />
-          <span className="text-[10px] font-bold">드래프트</span>
+        <button onClick={() => setView('draft')} className={`flex flex-col items-center gap-1 flex-1 ${view === 'draft' ? 'text-green-600 font-black' : 'text-slate-400 font-bold'}`}>
+          <Users size={20} />
+          <span className="text-[10px] uppercase">Draft</span>
         </button>
-        <button onClick={() => setView('hall')} className={`flex flex-col items-center gap-1 ${view === 'hall' ? 'text-green-600' : 'text-slate-400'}`}>
-          <Trophy size={24} />
-          <span className="text-[10px] font-bold">전당</span>
-        </button>
-        <button onClick={() => adminRole ? setAdminRole(null) : setShowAdminModal(true)} className={`p-2 rounded-xl ${adminRole ? 'bg-black text-white' : 'bg-slate-100 text-slate-400'}`}>
-          {adminRole ? <Unlock size={20} /> : <Lock size={20} />}
+        <button onClick={() => setView('hall')} className={`flex flex-col items-center gap-1 flex-1 ${view === 'hall' ? 'text-green-600 font-black' : 'text-slate-400 font-bold'}`}>
+          <Trophy size={20} />
+          <span className="text-[10px] uppercase">Hall</span>
         </button>
       </nav>
 
-      <main className="md:ml-20 p-4 sm:p-6 md:p-12 max-w-7xl mx-auto pb-24 md:pb-12">
-        {/* VIEW: HOME */}
+      <main className="flex-1 md:ml-20 p-4 md:p-10 pb-24 md:pb-10 max-w-screen-2xl mx-auto w-full">
+        {/* --- Home View --- */}
         {view === 'home' && (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            <header className="space-y-4">
-              <div className="inline-block bg-black text-white px-4 py-1.5 rounded-full text-xs font-black tracking-widest uppercase italic">
-                Udonggol Season 6
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+            <header className="py-4">
+              <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 px-4 py-1 rounded-full text-[10px] font-black uppercase mb-4 tracking-tighter">
+                <Calendar size={12} /> 2026. 03. 29 · GOLF TOURNAMENT
               </div>
-              <h1 className="text-5xl sm:text-7xl md:text-9xl font-black italic tracking-tighter leading-[0.85] text-slate-900 uppercase">
-                Victory<br/><span className="text-green-600">Through</span><br/>Unity
+              <h1 className="text-4xl md:text-7xl font-black text-slate-900 tracking-tighter uppercase leading-[0.9]">
+                UDONGGOL <br/>
+                <span className="text-green-600">SEASON 6</span>
               </h1>
             </header>
 
-            {/* 식사 안내 섹션 */}
-            <section className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm flex flex-col md:flex-row gap-6 items-start md:items-center overflow-hidden">
-              <div className="bg-orange-500 text-white p-5 rounded-2xl shrink-0">
-                <Utensils size={32} strokeWidth={2.5} />
-              </div>
-              <div className="flex-grow">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-slate-400 text-xs font-black uppercase tracking-wider">식사 안내</h4>
-                  {adminRole && (
-                    <button onClick={() => isEditingNotice ? updateNoticeInDb() : setIsEditingNotice(true)} className="text-slate-300 hover:text-green-600 p-1">
-                      {isEditingNotice ? <Check size={20} /> : <Edit3 size={20} />}
-                    </button>
-                  )}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                {/* Announcement Card */}
+                <div className="bg-slate-900 rounded-[32px] p-6 text-white shadow-2xl relative overflow-hidden group">
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="bg-green-500 p-2 rounded-xl text-white">
+                        <Megaphone size={20} />
+                      </div>
+                      {adminRole && (
+                        <button onClick={() => setIsEditingNotice(true)} className="text-white/40 hover:text-white"><Edit3 size={18}/></button>
+                      )}
+                    </div>
+                    <h3 className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Announcement</h3>
+                    {isEditingNotice ? (
+                      <div className="space-y-3">
+                        <textarea className="w-full bg-white/10 border border-white/20 rounded-2xl p-4 text-sm outline-none" rows="3" value={newNoticeText} onChange={e=>setNewNoticeText(e.target.value)} />
+                        <div className="flex gap-2">
+                          <button onClick={updateNotice} className="bg-white text-slate-900 px-4 py-2 rounded-xl text-xs font-bold">Save</button>
+                          <button onClick={()=>setIsEditingNotice(false)} className="text-white/60 text-xs font-bold">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xl md:text-2xl font-bold leading-snug tracking-tight">{notice.text}</p>
+                    )}
+                  </div>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                 </div>
-                {isEditingNotice ? (
-                  <textarea 
-                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl p-4 font-bold focus:outline-none" 
-                    value={notice.text} 
-                    onChange={e => setNotice({...notice, text: e.target.value})} 
-                    rows="2" 
-                  />
-                ) : (
-                  <p className="text-slate-900 font-black text-2xl md:text-4xl italic tracking-tight">{notice.text}</p>
-                )}
-              </div>
-            </section>
 
-            {/* 주요 정보 그리드 - 폰트 크기 대폭 확대 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-xl border border-slate-100 flex flex-col justify-between min-h-[220px]">
-                <Clock className="text-green-600 mb-6" size={48} strokeWidth={3} />
-                <div>
-                  <h3 className="text-slate-400 text-xs font-black uppercase mb-2 tracking-widest">대회 일정</h3>
-                  <p className="text-3xl sm:text-4xl md:text-5xl font-black italic text-slate-900 leading-tight">11:00 식사<br/>13:10 티업</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white p-5 rounded-[28px] border border-slate-200 shadow-sm flex flex-col gap-1">
+                    <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest">Meeting & Meal</div>
+                    <div className="text-sm font-black text-slate-900 flex items-center gap-1.5"><Utensils size={14} className="text-green-600"/> 03.29 (일) 11:00 식사</div>
+                  </div>
+                  <div className="bg-white p-5 rounded-[28px] border border-slate-200 shadow-sm flex flex-col gap-1">
+                    <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest">Start Time</div>
+                    <div className="text-sm font-black text-slate-900 flex items-center gap-1.5"><Clock size={14} className="text-red-500"/> 13:10 Tee-off</div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-[28px] border border-slate-200 shadow-sm flex flex-col gap-1">
+                   <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest">Location</div>
+                   <div className="text-sm font-black text-slate-900 flex items-center gap-1.5"><MapPin size={14} className="text-blue-500"/> 샤인데일 CC</div>
                 </div>
               </div>
 
-              <div className="bg-slate-900 p-8 md:p-12 rounded-[40px] shadow-xl flex flex-col justify-between min-h-[220px]">
-                <MapPin className="text-white mb-6" size={48} strokeWidth={3} />
-                <div>
-                  <h3 className="text-slate-500 text-xs font-black uppercase mb-2 tracking-widest">개최 장소</h3>
-                  <p className="text-3xl sm:text-4xl md:text-5xl font-black italic text-white leading-tight">샤인데일 CC</p>
+              {/* Stats Summary */}
+              <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm space-y-8">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-black text-slate-900 uppercase italic">Tournament Stats</h3>
+                  <button onClick={() => setView('hall')} className="text-green-600 text-[10px] font-black uppercase flex items-center gap-1">
+                    View Hall of Fame <ChevronRight size={14}/>
+                  </button>
                 </div>
-              </div>
+                
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500">
+                      <Coins size={28} />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Cash Contribution</div>
+                      <div className="text-2xl font-black text-slate-900">{donationStats.cash} <span className="text-sm">KRW</span></div>
+                    </div>
+                  </div>
 
-              <div className="bg-amber-500 p-8 md:p-12 rounded-[40px] shadow-xl flex flex-col justify-between min-h-[220px] text-white">
-                <HeartHandshake className="text-white mb-6" size={48} strokeWidth={3} />
-                <div>
-                  <h3 className="text-amber-200 text-xs font-black uppercase mb-2 tracking-widest">찬조 현황</h3>
-                  <p className="text-3xl sm:text-4xl md:text-5xl font-black italic leading-tight mb-1">{donationStats.cash}원</p>
-                  <p className="text-sm font-bold opacity-80 italic tracking-tight">외 물품 찬조 {donationStats.items}건</p>
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-500">
+                      <Gift size={28} />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sponsored Items</div>
+                      <div className="text-2xl font-black text-slate-900">{donationStats.items} <span className="text-sm">Items</span></div>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100 grid grid-cols-2 gap-4">
+                    <div className="bg-slate-50 p-4 rounded-2xl">
+                      <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Players</div>
+                      <div className="text-xl font-black text-slate-900">{players.length}</div>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl">
+                      <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Pick Completed</div>
+                      <div className="text-xl font-black text-slate-900">{players.filter(p=>p.team).length}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* VIEW: DRAFT */}
+        {/* --- Draft View --- */}
         {view === 'draft' && (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-              <h2 className="text-5xl md:text-8xl font-black italic uppercase text-slate-900 tracking-tighter">Draft Board</h2>
-              <div className="flex gap-4 w-full md:w-auto">
-                <div className="flex-1 md:flex-none bg-pink-500 text-white p-4 px-8 rounded-2xl text-center shadow-lg shadow-pink-200">
-                  <p className="text-[10px] font-black uppercase opacity-70">Jolam</p>
-                  <p className="text-3xl font-black italic">{players.filter(p=>p.team==='jolam').length}</p>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-6">
+              <div>
+                <h2 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">Draft Board</h2>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-2 italic">Professional Player Selection</p>
+              </div>
+              <div className="flex gap-4">
+                <div className="bg-pink-100 border border-pink-200 px-4 py-2 rounded-2xl flex flex-col items-center min-w-[100px]">
+                  <span className="text-[8px] font-black text-pink-600 uppercase">Team Jolam H.cap</span>
+                  <span className="text-xl font-black text-pink-700">{teamStats.jolam.hcapSum}</span>
                 </div>
-                <div className="flex-1 md:flex-none bg-blue-600 text-white p-4 px-8 rounded-2xl text-center shadow-lg shadow-blue-200">
-                  <p className="text-[10px] font-black uppercase opacity-70">Yumki</p>
-                  <p className="text-3xl font-black italic">{players.filter(p=>p.team==='yumki').length}</p>
+                <div className="bg-blue-100 border border-blue-200 px-4 py-2 rounded-2xl flex flex-col items-center min-w-[100px]">
+                  <span className="text-[8px] font-black text-blue-600 uppercase">Team Yumki H.cap</span>
+                  <span className="text-xl font-black text-blue-700">{teamStats.yumki.hcapSum}</span>
                 </div>
               </div>
-            </div>
+            </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Draft List */}
-              <div className="lg:col-span-8 bg-white rounded-[40px] p-6 md:p-10 shadow-xl border border-slate-100">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 italic">Remaining Players ({players.filter(p=>!p.team).length})</h3>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {players.filter(p=>!p.team).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
-                    <div key={p.id} className="bg-slate-50 p-5 rounded-3xl border border-slate-100 transition-all hover:bg-white hover:shadow-md group">
-                      <span className="font-black text-slate-800 block mb-4 text-center">{p.name}</span>
-                      {adminRole && (
-                        <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => assignTeam(p.id, 'jolam')} className="bg-pink-500 text-white py-2 rounded-xl text-[10px] font-black">졸람</button>
-                          <button onClick={() => assignTeam(p.id, 'yumki')} className="bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black">염키</button>
-                        </div>
-                      )}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Teams Display (4/12) */}
+              <div className="lg:col-span-4 space-y-4">
+                <div className="bg-pink-50/50 p-5 rounded-[32px] border border-pink-100">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-[11px] font-black text-pink-600 uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]"></span> TEAM JOLAM
+                    </h3>
+                    <div className="bg-white/60 px-2 py-0.5 rounded-full text-[10px] font-black text-pink-700">
+                      {teamStats.jolam.count} Players
                     </div>
-                  ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {players.filter(p=>p.team==='jolam').map(p => <PlayerCard key={p.id} p={p} showHandicapAlways={true} />)}
+                  </div>
+                </div>
+
+                <div className="bg-blue-50/50 p-5 rounded-[32px] border border-blue-100">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-[11px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 bg-blue-600 rounded-full shadow-[0_0_8px_rgba(37,99,235,0.5)]"></span> TEAM YUMKI
+                    </h3>
+                    <div className="bg-white/60 px-2 py-0.5 rounded-full text-[10px] font-black text-blue-700">
+                      {teamStats.yumki.count} Players
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {players.filter(p=>p.team==='yumki').map(p => <PlayerCard key={p.id} p={p} showHandicapAlways={true} />)}
+                  </div>
                 </div>
               </div>
 
-              {/* Chat & Teams */}
-              <div className="lg:col-span-4 space-y-6">
-                <div className="bg-slate-900 rounded-[30px] p-6 text-white min-h-[300px] flex flex-col shadow-2xl">
-                  <h4 className="text-[10px] font-black uppercase text-slate-500 mb-4 tracking-widest">Real-time Feed</h4>
-                  <div className="flex-grow overflow-y-auto space-y-4 max-h-[300px] scrollbar-hide mb-4 pr-2">
+              {/* Waiting Pool (4/12) */}
+              <div className="lg:col-span-4 bg-slate-100 rounded-[32px] p-6 border border-slate-200">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Draft Pool
+                  </h3>
+                  <span className="text-[10px] font-bold text-slate-400 bg-white px-3 py-1 rounded-full border border-slate-200">
+                    {players.filter(p=>!p.team).length} REMAINING
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* 핸디캡은 관리자만 볼 수 있음 */}
+                  {players.filter(p=>!p.team).map(p => <PlayerCard key={p.id} p={p} showHandicapAlways={false} />)}
+                </div>
+              </div>
+
+              {/* Chat (4/12) */}
+              <div className="lg:col-span-4 bg-slate-900 rounded-[32px] p-6 text-white flex flex-col h-[600px] shadow-2xl relative overflow-hidden">
+                 <div className="relative z-10 flex flex-col h-full">
+                   <h4 className="text-[10px] font-black uppercase text-slate-500 mb-6 tracking-[0.2em] flex items-center gap-2">
+                     <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span> LIVE BROADCAST
+                   </h4>
+                   <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-1 scrollbar-hide">
                     {messages.map(m => (
                       <div key={m.id} className={`flex flex-col ${m.uid === user?.uid ? 'items-end' : 'items-start'}`}>
-                        <span className="text-[8px] font-black text-slate-500 mb-1 uppercase tracking-tighter">{m.user} {m.time}</span>
-                        <div className={`px-4 py-2 rounded-2xl text-[11px] font-bold ${
-                          m.user === 'SYSTEM' ? 'bg-white/10 text-slate-400 italic' : 
+                        <span className="text-[8px] font-bold text-slate-500 mb-1.5 uppercase flex items-center gap-1">
+                          {m.user === 'MASTER' && <Shield size={8} className="text-amber-500"/>}
+                          {m.user === 'SYSTEM' && <Megaphone size={8} className="text-green-400"/>}
+                          {m.user} · {m.time}
+                        </span>
+                        <div className={`px-4 py-2.5 rounded-2xl text-[12px] font-medium max-w-[90%] shadow-sm ${
+                          m.user === 'MASTER' ? 'bg-amber-500 text-white' : 
+                          m.user === 'SYSTEM' ? 'bg-white/10 text-green-400 border border-green-400/30' : 
                           (m.uid === user?.uid ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-300')
                         }`}>
                           {m.text}
@@ -314,75 +474,146 @@ export default function App() {
                     <div ref={chatEndRef} />
                   </div>
                   <form onSubmit={handleSendChat} className="flex gap-2">
-                    <input className="flex-1 bg-white/10 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-1 ring-green-600" placeholder="Type message..." value={chatInput} onChange={e => setChatInput(e.target.value)} />
-                    <button type="submit" className="bg-green-600 p-3 rounded-xl hover:bg-green-500"><Send size={18} /></button>
+                    <input className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-[12px] outline-none focus:bg-white/10 transition-colors" placeholder="Send a message..." value={chatInput} onChange={e => setChatInput(e.target.value)} />
+                    <button type="submit" className="bg-green-600 hover:bg-green-500 p-3 rounded-2xl transition-colors shadow-lg shadow-green-900/20"><Send size={18} /></button>
                   </form>
-                </div>
+                 </div>
+                 <div className="absolute top-0 right-0 w-40 h-40 bg-green-500/10 blur-[100px]"></div>
               </div>
             </div>
           </div>
         )}
 
-        {/* VIEW: HALL OF FAME */}
+        {/* --- Hall of Fame View --- */}
         {view === 'hall' && (
-          <div className="space-y-12 animate-in fade-in duration-500">
-            <h2 className="text-5xl md:text-8xl font-black italic uppercase text-slate-900 tracking-tighter">Hall of<br/><span className="text-amber-500 font-black">Contributors</span></h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {hallItems.length > 0 ? (
-                hallItems.map(item => (
-                  <div key={item.id} className="bg-white p-8 md:p-10 rounded-[40px] shadow-lg border border-slate-100 flex items-center justify-between group">
-                    <div className="flex items-center gap-6">
-                      <div className={`p-5 rounded-2xl ${item.type === 'cash' ? 'bg-amber-50 text-amber-500' : 'bg-green-50 text-green-500'}`}>
-                        {item.type === 'cash' ? <Coins size={36} strokeWidth={2.5} /> : <Gift size={36} strokeWidth={2.5} />}
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-slate-200">
+              <div>
+                <h2 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">Hall of Fame</h2>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-2 italic">Contribution & Sponsorship</p>
+              </div>
+              <button onClick={() => setIsAddingHall(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl flex items-center gap-2 hover:bg-slate-800 transition-colors">
+                <Plus size={16}/> Add Contribution
+              </button>
+            </header>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Cash */}
+              <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm relative overflow-hidden">
+                <div className="flex justify-between items-center mb-8 relative z-10">
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><Coins size={16}/></div> Cash Support
+                  </h3>
+                  <span className="text-xl font-black text-amber-600">{donationStats.cash} <span className="text-[10px] text-slate-400">KRW</span></span>
+                </div>
+                <div className="space-y-3 relative z-10">
+                  {hallItems.filter(i=>i.type==='cash').map(item => (
+                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl group border border-transparent hover:border-amber-100 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center font-black text-slate-900 shadow-sm">{item.name[0]}</div>
+                        <span className="font-bold text-slate-900">{item.name}</span>
                       </div>
-                      <div>
-                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 leading-none mb-2">{item.name}</h4>
-                        <p className="text-slate-500 font-bold text-sm md:text-base italic">
-                          {item.type === 'cash' ? `${Number(item.amount).toLocaleString()}원 찬조` : item.detail}
-                        </p>
+                      <div className="flex items-center gap-4">
+                        <span className="font-black text-slate-900">{Number(item.amount).toLocaleString()}원</span>
+                        {adminRole && (
+                          <button onClick={() => deleteHallItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                        )}
                       </div>
                     </div>
-                    {adminRole && (
-                      <button onClick={async () => await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'hall', item.id))} className="text-slate-200 hover:text-red-500 p-2">
-                        <Trash2 size={24} />
-                      </button>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className="col-span-full py-20 text-center border-4 border-dashed border-slate-200 rounded-[50px]">
-                  <p className="text-slate-300 font-black text-2xl uppercase italic">Waiting for supporters</p>
+                  ))}
                 </div>
-              )}
+              </div>
+
+              {/* Items */}
+              <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm relative overflow-hidden">
+                <div className="flex justify-between items-center mb-8 relative z-10">
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><Gift size={16}/></div> Sponsored Items
+                  </h3>
+                  <span className="text-xl font-black text-purple-600">{donationStats.items} <span className="text-[10px] text-slate-400">ITEMS</span></span>
+                </div>
+                <div className="space-y-3 relative z-10">
+                  {hallItems.filter(i=>i.type==='item').map(item => (
+                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl group border border-transparent hover:border-purple-100 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center font-black text-slate-900 shadow-sm">{item.name[0]}</div>
+                        <div>
+                          <div className="font-bold text-slate-900">{item.name}</div>
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">{item.item}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-black uppercase tracking-widest">Sponsor</div>
+                        {adminRole && (
+                          <button onClick={() => deleteHallItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
       </main>
 
-      {/* Admin Auth Modal */}
+      {/* --- Modals --- */}
       {showAdminModal && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[40px] w-full max-w-sm p-10 text-center shadow-2xl">
-            <Shield size={64} className="mx-auto text-slate-900 mb-6" strokeWidth={2.5} />
-            <h2 className="text-2xl font-black mb-2 italic">Admin Access</h2>
-            <p className="text-slate-400 font-bold mb-8 text-xs uppercase tracking-widest">Enter Credentials</p>
-            <input 
-              type="password" 
-              inputMode="numeric"
-              value={adminPassword} 
-              onChange={e => setAdminPassword(e.target.value)} 
-              onKeyPress={e => e.key === 'Enter' && handleAdminLogin()} 
-              className="w-full bg-slate-50 border-4 border-slate-100 rounded-3xl p-6 text-center text-4xl font-black mb-8 outline-none focus:border-green-500/30" 
-              placeholder="••••" 
-            />
-            <div className="flex gap-4">
-              <button onClick={() => setShowAdminModal(false)} className="flex-1 py-4 font-black text-slate-400">CLOSE</button>
-              <button onClick={handleAdminLogin} className="flex-1 bg-black text-white rounded-2xl font-black py-4 shadow-xl">ENTER</button>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+          <div className="bg-white rounded-[32px] w-full max-w-xs p-8 text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <Shield size={40} className="mx-auto text-slate-900 mb-4" />
+            <h2 className="text-lg font-black italic uppercase tracking-tight">Admin Login</h2>
+            <input type="password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAdminLogin()} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-3 text-center text-2xl font-black my-4 outline-none focus:border-green-500 transition-colors" placeholder="••••" />
+            <div className="flex flex-col gap-2">
+              <button onClick={handleAdminLogin} className="bg-slate-900 text-white rounded-xl font-bold py-3 text-xs tracking-widest uppercase shadow-lg active:scale-95 transition-transform">Login</button>
+              <button onClick={() => setShowAdminModal(false)} className="text-slate-300 hover:text-slate-400 text-[9px] font-bold uppercase tracking-widest mt-2">Cancel</button>
             </div>
           </div>
         </div>
       )}
+
+      {isAddingHall && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+          <div className="bg-white rounded-[40px] w-full max-w-sm p-10 shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter italic mb-6">New Contribution</h2>
+            <div className="space-y-4">
+              <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+                <button onClick={() => setNewHallItem({...newHallItem, type: 'cash'})} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${newHallItem.type === 'cash' ? 'bg-white shadow-sm text-amber-600' : 'text-slate-400'}`}>Cash</button>
+                <button onClick={() => setNewHallItem({...newHallItem, type: 'item'})} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${newHallItem.type === 'item' ? 'bg-white shadow-sm text-purple-600' : 'text-slate-400'}`}>Item</button>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Sponsor Name</label>
+                <input type="text" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold outline-none" placeholder="이름을 입력하세요" value={newHallItem.name} onChange={e => setNewHallItem({...newHallItem, name: e.target.value})} />
+              </div>
+              {newHallItem.type === 'cash' ? (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Amount (KRW)</label>
+                  <input type="number" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold outline-none" placeholder="금액 입력" value={newHallItem.amount} onChange={e => setNewHallItem({...newHallItem, amount: e.target.value})} />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Item Description</label>
+                  <input type="text" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold outline-none" placeholder="물품 내용을 입력하세요" value={newHallItem.item} onChange={e => setNewHallItem({...newHallItem, item: e.target.value})} />
+                </div>
+              )}
+              <div className="flex gap-2 pt-4">
+                <button onClick={addHallItem} className="flex-1 bg-slate-900 text-white rounded-2xl font-black py-4 text-xs tracking-widest uppercase shadow-xl hover:bg-slate-800 transition-all active:scale-95">Register</button>
+                <button onClick={() => setIsAddingHall(false)} className="px-6 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        body { font-family: 'Pretendard', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; letter-spacing: -0.02em; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .animate-in { animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes zoom-in-95 { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+      `}</style>
     </div>
   );
 }
