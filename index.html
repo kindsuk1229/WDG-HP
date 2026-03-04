@@ -13,25 +13,28 @@ import {
   Send, Trash2, Edit3, Check, X, 
   Calendar, Utensils, Clock, MapPin, 
   HeartHandshake, Coins, Gift, Shield, ChevronRight, Hash,
-  Megaphone, ExternalLink, Plus
+  Megaphone, ExternalLink, Plus, Loader2
 } from 'lucide-react';
 
-// --- Firebase Safety Initialization ---
+// --- 전역 설정 및 Firebase 안전 초기화 ---
 let app, auth, db;
-try {
-  const firebaseConfig = JSON.parse(__firebase_config);
-  if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
-  } else {
-    app = getApps()[0];
-  }
-  auth = getAuth(app);
-  db = getFirestore(app);
-} catch (e) {
-  console.error("Firebase config error:", e);
-}
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'udonggol-s6-fixed';
 
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'udonggol-s6-pro-v4';
+try {
+  const configRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+  if (configRaw) {
+    const firebaseConfig = JSON.parse(configRaw);
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApps()[0];
+    }
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
+} catch (e) {
+  console.error("Firebase Initialization Failed:", e);
+}
 
 const INITIAL_PLAYERS = [
   "영빈", "밤또", "낭빠", "비락", "벙커", "찐", "늘보", "호이서", "고들빠", "윤샷", 
@@ -44,10 +47,11 @@ const INITIAL_PLAYERS = [
 export default function App() {
   const [view, setView] = useState('home');
   const [user, setUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [adminRole, setAdminRole] = useState(null);
   const [players, setPlayers] = useState([]);
   const [hallItems, setHallItems] = useState([]);
-  const [notice, setNotice] = useState({ text: "데이터를 불러오는 중...", lastUpdated: null });
+  const [notice, setNotice] = useState({ text: "공지사항을 불러오는 중입니다...", lastUpdated: null });
   const [messages, setMessages] = useState([]);
   
   const [isEditingNotice, setIsEditingNotice] = useState(false);
@@ -61,10 +65,14 @@ export default function App() {
 
   const chatEndRef = useRef(null);
 
-  // 1. Auth Logic (Rule 3)
+  // 1. 인증 로직 (인증 실패해도 UI는 보여야 함)
   useEffect(() => {
+    if (!auth) {
+      setIsAuthLoading(false);
+      return;
+    }
+
     const initAuth = async () => {
-      if (!auth) return;
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
@@ -72,20 +80,24 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (error) { 
-        console.error("Auth error:", error); 
+        console.error("Auth process error:", error); 
+      } finally {
+        setIsAuthLoading(false);
       }
     };
+    
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsubscribe();
   }, []);
 
-  // 2. Data Fetching (Rule 1 & 2)
+  // 2. 데이터 구독 (인증된 경우에만 실행)
   useEffect(() => {
     if (!user || !db) return;
     
     const publicPath = (col) => collection(db, 'artifacts', appId, 'public', 'data', col);
 
+    // 공지사항
     const unsubNotice = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -94,43 +106,42 @@ export default function App() {
       } else {
         setNotice({ text: "11:00 식사 후 13:10부터 순차적으로 티오프 진행합니다 (샤인데일 CC)", lastUpdated: Date.now() });
       }
-    }, (err) => console.error("Notice error:", err));
+    }, (err) => console.error("Firestore Notice Error:", err));
 
+    // 선수 명단
     const unsubPlayers = onSnapshot(publicPath('players'), (snapshot) => {
       const playerList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (playerList.length === 0) {
+      if (playerList.length === 0 && adminRole === 'MASTER') {
+        // 데이터가 아예 없을 때 마스터 권한이 있으면 초기화 시도
         INITIAL_PLAYERS.forEach((name, idx) => {
           setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', `p${idx}`), { 
             name, team: null, handicap: 0 
           });
         });
       } else {
-        const sorted = [...playerList].sort((a, b) => {
-          const hA = Number(a.handicap) || 0;
-          const hB = Number(b.handicap) || 0;
-          return hA - hB || a.name.localeCompare(b.name);
-        });
-        setPlayers(sorted);
+        setPlayers(playerList.sort((a, b) => (Number(a.handicap) || 0) - (Number(b.handicap) || 0) || a.name.localeCompare(b.name)));
       }
-    }, (err) => console.error("Players error:", err));
+    }, (err) => console.error("Firestore Players Error:", err));
 
+    // 명예의 전당
     const unsubHall = onSnapshot(publicPath('hall'), (snapshot) => {
       setHallItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => console.error("Hall error:", err));
+    }, (err) => console.error("Firestore Hall Error:", err));
 
+    // 채팅
     const unsubChat = onSnapshot(publicPath('chats'), (snapshot) => {
       const msgList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setMessages(msgList.sort((a, b) => a.timestamp - b.timestamp).slice(-50));
-    }, (err) => console.error("Chat error:", err));
+    }, (err) => console.error("Firestore Chat Error:", err));
 
     return () => { unsubNotice(); unsubPlayers(); unsubHall(); unsubChat(); };
-  }, [user]);
+  }, [user, adminRole]);
 
   useEffect(() => { 
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
   }, [messages, view]);
 
-  // Logic Helpers
+  // 통계 계산
   const teamStats = useMemo(() => {
     const jolam = players.filter(p => p.team === 'jolam');
     const yumki = players.filter(p => p.team === 'yumki');
@@ -141,23 +152,25 @@ export default function App() {
   }, [players]);
 
   const donationStats = useMemo(() => {
-    const cashTotal = hallItems
+    const items = hallItems || [];
+    const cashTotal = items
       .filter(item => item.type === 'cash')
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    const itemCount = hallItems.filter(item => item.type === 'item').length;
+    const itemCount = items.filter(item => item.type === 'item').length;
     return { cash: cashTotal.toLocaleString(), items: itemCount };
   }, [hallItems]);
 
   const handleAdminLogin = () => {
-    if (['7777', '0101', '0202'].includes(adminPassword)) {
-      setAdminRole(adminPassword === '7777' ? 'MASTER' : (adminPassword === '0101' ? 'JOLAM' : 'YUMKI'));
+    const pw = adminPassword.trim();
+    if (['7777', '0101', '0202'].includes(pw)) {
+      setAdminRole(pw === '7777' ? 'MASTER' : (pw === '0101' ? 'JOLAM' : 'YUMKI'));
       setShowAdminModal(false);
     }
     setAdminPassword('');
   };
 
   const updateNotice = async () => {
-    if (!adminRole) return;
+    if (!adminRole || !db) return;
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'notice'), {
       text: newNoticeText,
       lastUpdated: Date.now()
@@ -166,29 +179,18 @@ export default function App() {
   };
 
   const assignTeam = async (id, team) => {
-    if (!adminRole) return;
-    const player = players.find(p => p.id === id);
-    if (!player) return;
+    if (!adminRole || !db) return;
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { team });
-    if (team) {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), {
-        user: "SYSTEM",
-        text: `📢 [${adminRole}] ${player.name} 선수가 ${team === 'jolam' ? '팀 조람' : '팀 염기'}에 지명되었습니다!`,
-        timestamp: Date.now(),
-        time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-        uid: "system-bot"
-      });
-    }
   };
 
   const updateHandicap = async (id, val) => {
-    if (!adminRole) return;
+    if (!adminRole || !db) return;
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { handicap: Number(val) || 0 });
   };
 
   const handleSendChat = async (e) => {
     e.preventDefault();
-    if (!chatInput.trim() || !user) return;
+    if (!chatInput.trim() || !user || !db) return;
     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), {
       user: adminRole || "참가자",
       text: chatInput,
@@ -199,75 +201,39 @@ export default function App() {
     setChatInput('');
   };
 
-  const addHallItem = async () => {
-    if (!newHallItem.name) return;
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'hall'), {
-      ...newHallItem,
-      amount: Number(newHallItem.amount) || 0,
-      timestamp: Date.now()
-    });
-    setNewHallItem({ name: '', amount: '', type: 'cash', item: '' });
-    setIsAddingHall(false);
-  };
-
-  const deleteHallItem = async (id) => {
-    if (!adminRole) return;
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'hall', id));
-  };
-
-  // --- Sub-components ---
-  const PlayerCard = ({ p, isPool = false }) => (
+  // 플레이어 카드 컴포넌트
+  const PlayerCard = ({ p }) => (
     <div className={`p-3 rounded-2xl border transition-all ${p.team === 'jolam' ? 'bg-pink-50 border-pink-200' : p.team === 'yumki' ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 shadow-sm'}`}>
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-start">
         <div className="flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="font-black text-slate-800 text-[14px]">{p.name}</span>
-            {(adminRole || (!isPool && p.team)) && (
-              <div className="bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                <span className="text-[9px] font-black text-slate-500">H.{p.handicap || 0}</span>
-              </div>
-            )}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-black text-slate-800 text-sm">{p.name}</span>
+            <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-black text-slate-500">H.{p.handicap || 0}</span>
           </div>
         </div>
         {adminRole && p.team && (
-          <button onClick={() => assignTeam(p.id, null)} className="text-slate-300 hover:text-red-500">
-            <X size={14} />
-          </button>
+          <button onClick={() => assignTeam(p.id, null)} className="text-slate-300 hover:text-red-500"><X size={14} /></button>
         )}
       </div>
       
       {adminRole && (
-        <div className="space-y-1.5 mt-2 pt-2 border-t border-slate-100">
+        <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-2">
           {!p.team && (
             <div className="flex gap-1">
-              <button onClick={() => assignTeam(p.id, 'jolam')} className="flex-1 bg-pink-500 text-white py-1 rounded-lg text-[9px] font-bold">JOLAM</button>
-              <button onClick={() => assignTeam(p.id, 'yumki')} className="flex-1 bg-blue-600 text-white py-1 rounded-lg text-[9px] font-bold">YUMKI</button>
+              <button onClick={() => assignTeam(p.id, 'jolam')} className="flex-1 bg-pink-500 text-white py-1.5 rounded-lg text-[10px] font-bold">조람</button>
+              <button onClick={() => assignTeam(p.id, 'yumki')} className="flex-1 bg-blue-600 text-white py-1.5 rounded-lg text-[10px] font-bold">염기</button>
             </div>
           )}
-          <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1">
-            <span className="text-[8px] font-bold text-slate-400 uppercase mr-1">H</span>
-            <input 
-              type="number" 
-              className="w-full text-[11px] font-black outline-none bg-transparent"
-              defaultValue={p.handicap}
-              onBlur={(e) => updateHandicap(p.id, e.target.value)}
-            />
-          </div>
+          <input 
+            type="number" 
+            className="w-full text-[11px] font-black p-1 border rounded"
+            defaultValue={p.handicap}
+            onBlur={(e) => updateHandicap(p.id, e.target.value)}
+          />
         </div>
       )}
     </div>
   );
-
-  if (!user) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
-        <div className="text-center animate-pulse">
-          <div className="font-black text-2xl text-green-600 mb-2 italic tracking-tighter">UDONGGOL</div>
-          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest">Connecting to Season 6...</div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row pb-20 md:pb-0">
@@ -291,6 +257,13 @@ export default function App() {
       </nav>
 
       <main className="flex-1 md:ml-20 p-4 md:p-10 max-w-7xl mx-auto w-full overflow-x-hidden">
+        {/* Loading Overlay */}
+        {isAuthLoading && (
+          <div className="absolute inset-0 bg-white/80 z-[60] flex items-center justify-center">
+            <Loader2 className="animate-spin text-green-600" size={40} />
+          </div>
+        )}
+
         {view === 'home' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <header>
@@ -321,7 +294,6 @@ export default function App() {
                   ) : (
                     <p className="text-xl md:text-2xl font-bold leading-tight flex-grow">{notice.text}</p>
                   )}
-                  <div className="text-[10px] text-slate-600 mt-6 italic uppercase font-medium">Last update: {notice.lastUpdated ? new Date(notice.lastUpdated).toLocaleDateString() : 'N/A'}</div>
                 </div>
               </div>
 
@@ -358,22 +330,22 @@ export default function App() {
                <h2 className="text-4xl font-black uppercase italic tracking-tighter">Draft Board</h2>
                <div className="flex gap-2 w-full sm:w-auto">
                  <div className="flex-1 bg-pink-100 px-4 py-2 rounded-2xl text-center border border-pink-200 min-w-[100px]">
-                   <div className="text-[8px] font-black text-pink-600 uppercase">Team Jolam H</div>
+                   <div className="text-[8px] font-black text-pink-600 uppercase">조람 핸디 합</div>
                    <div className="text-xl font-black text-pink-700">{teamStats.jolam.hcapSum}</div>
                  </div>
                  <div className="flex-1 bg-blue-100 px-4 py-2 rounded-2xl text-center border border-blue-200 min-w-[100px]">
-                   <div className="text-[8px] font-black text-blue-600 uppercase">Team Yumki H</div>
+                   <div className="text-[8px] font-black text-blue-600 uppercase">염기 핸디 합</div>
                    <div className="text-xl font-black text-blue-700">{teamStats.yumki.hcapSum}</div>
                  </div>
                </div>
              </header>
 
              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-               {/* Team Lists */}
+               {/* 팀 목록 */}
                <div className="lg:col-span-4 space-y-4">
                  <div className="bg-pink-50/50 p-6 rounded-[32px] border border-pink-100">
                     <h3 className="text-[10px] font-black text-pink-500 uppercase mb-4 tracking-widest flex items-center justify-between">
-                      TEAM JOLAM <span>{teamStats.jolam.count} Players</span>
+                      TEAM JOLAM <span>{teamStats.jolam.count} 명</span>
                     </h3>
                     <div className="grid grid-cols-2 gap-2">
                       {players.filter(p=>p.team==='jolam').map(p => <PlayerCard key={p.id} p={p} />)}
@@ -381,7 +353,7 @@ export default function App() {
                  </div>
                  <div className="bg-blue-50/50 p-6 rounded-[32px] border border-blue-100">
                     <h3 className="text-[10px] font-black text-blue-500 uppercase mb-4 tracking-widest flex items-center justify-between">
-                      TEAM YUMKI <span>{teamStats.yumki.count} Players</span>
+                      TEAM YUMKI <span>{teamStats.yumki.count} 명</span>
                     </h3>
                     <div className="grid grid-cols-2 gap-2">
                       {players.filter(p=>p.team==='yumki').map(p => <PlayerCard key={p.id} p={p} />)}
@@ -389,30 +361,33 @@ export default function App() {
                  </div>
                </div>
 
-               {/* Draft Pool */}
+               {/* 대기 명단 */}
                <div className="lg:col-span-4 bg-slate-100 p-6 rounded-[32px] border border-slate-200">
-                 <h3 className="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">DRAFT POOL ({players.filter(p=>!p.team).length})</h3>
+                 <h3 className="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest flex justify-between">
+                   DRAFT POOL <span>{players.filter(p=>!p.team).length} 명</span>
+                 </h3>
                  <div className="grid grid-cols-2 gap-2 h-[400px] lg:h-[600px] overflow-y-auto scrollbar-hide content-start pb-10">
-                   {players.filter(p=>!p.team).map(p => <PlayerCard key={p.id} p={p} isPool={true} />)}
+                   {players.filter(p=>!p.team).map(p => <PlayerCard key={p.id} p={p} />)}
                  </div>
                </div>
 
-               {/* Chat Section */}
+               {/* 채팅 */}
                <div className="lg:col-span-4 bg-slate-900 p-6 rounded-[32px] text-white flex flex-col h-[500px] lg:h-auto">
                  <h3 className="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">LIVE CHAT</h3>
-                 <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-1 scrollbar-hide">
+                 <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-1 scrollbar-hide text-xs">
+                    {messages.length === 0 && <div className="text-slate-600 italic text-center py-10">메시지가 없습니다.</div>}
                     {messages.map(m => (
                       <div key={m.id} className={`flex flex-col ${m.uid === user?.uid ? 'items-end' : 'items-start'}`}>
-                        <div className={`px-4 py-2 rounded-2xl text-[12px] max-w-[85%] ${m.user === 'SYSTEM' ? 'bg-white/5 border border-white/10 text-green-400 italic' : (m.uid === user?.uid ? 'bg-green-600 shadow-lg' : 'bg-slate-800')}`}>
+                        <div className={`px-4 py-2 rounded-2xl max-w-[85%] ${m.user === 'SYSTEM' ? 'bg-white/5 text-green-400 italic' : (m.uid === user?.uid ? 'bg-green-600' : 'bg-slate-800')}`}>
                           {m.text}
                         </div>
-                        <span className="text-[8px] text-slate-500 mt-1 uppercase px-1">{m.user} · {m.time}</span>
+                        <span className="text-[8px] text-slate-500 mt-1 uppercase">{m.user} · {m.time}</span>
                       </div>
                     ))}
                     <div ref={chatEndRef} />
                  </div>
                  <form onSubmit={handleSendChat} className="flex gap-2">
-                   <input className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-xs outline-none focus:border-green-500" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="실시간 응원 메시지..."/>
+                   <input className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-xs outline-none focus:border-green-500" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="응원 한마디..."/>
                    <button className="bg-green-600 p-3 rounded-xl hover:bg-green-500 transition-colors shadow-lg"><Send size={18}/></button>
                  </form>
                </div>
@@ -424,35 +399,35 @@ export default function App() {
           <div className="space-y-8 animate-in fade-in duration-500">
             <header className="flex justify-between items-center">
               <h2 className="text-4xl font-black uppercase italic tracking-tighter">Hall of Fame</h2>
-              <button onClick={()=>setIsAddingHall(true)} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-all"><Plus size={16}/> 등록하기</button>
+              <button onClick={()=>setIsAddingHall(true)} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-all"><Plus size={16}/> 등록</button>
             </header>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 후원금 섹션 */}
               <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm">
                 <h3 className="text-xs font-black uppercase mb-6 flex items-center gap-2 text-amber-500"><Coins size={16}/> 후원금 내역</h3>
                 <div className="space-y-3">
-                  {hallItems.filter(i=>i.type==='cash').length === 0 && <div className="text-slate-300 text-xs italic py-10 text-center font-bold">아직 후원 내역이 없습니다.</div>}
                   {hallItems.filter(i=>i.type==='cash').map(item => (
-                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-amber-200 transition-colors">
+                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
                       <span className="font-bold">{item.name}</span>
                       <div className="flex items-center gap-3">
                         <span className="font-black text-amber-600">{Number(item.amount).toLocaleString()}원</span>
-                        {adminRole && <button onClick={()=>deleteHallItem(item.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button>}
+                        {adminRole && <button onClick={()=>deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'hall', item.id))} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button>}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+              {/* 협찬 물품 섹션 */}
               <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm">
                 <h3 className="text-xs font-black uppercase mb-6 flex items-center gap-2 text-purple-500"><Gift size={16}/> 협찬 물품 내역</h3>
                 <div className="space-y-3">
-                  {hallItems.filter(i=>i.type==='item').length === 0 && <div className="text-slate-300 text-xs italic py-10 text-center font-bold">아직 협찬 내역이 없습니다.</div>}
                   {hallItems.filter(i=>i.type==='item').map(item => (
-                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-purple-200 transition-colors">
+                    <div key={item.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
                       <div>
                         <div className="font-bold">{item.name}</div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{item.item}</div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase">{item.item}</div>
                       </div>
-                      {adminRole && <button onClick={()=>deleteHallItem(item.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button>}
+                      {adminRole && <button onClick={()=>deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'hall', item.id))} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button>}
                     </div>
                   ))}
                 </div>
@@ -462,37 +437,51 @@ export default function App() {
         )}
       </main>
 
-      {/* --- Modals --- */}
+      {/* Admin Login Modal */}
       {showAdminModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
           <div className="bg-white rounded-[32px] p-8 w-full max-w-xs text-center shadow-2xl animate-in zoom-in-95 duration-200">
             <Shield size={32} className="mx-auto mb-4 text-green-600"/>
             <h2 className="font-black uppercase italic mb-4">Admin Access</h2>
-            <input type="password" value={adminPassword} onChange={e=>setAdminPassword(e.target.value)} onKeyPress={e=>e.key==='Enter' && handleAdminLogin()} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-center text-xl outline-none mb-4 focus:border-green-500" placeholder="••••" autoFocus/>
+            <input 
+              type="password" 
+              value={adminPassword} 
+              onChange={e=>setAdminPassword(e.target.value)} 
+              onKeyPress={e=>e.key==='Enter' && handleAdminLogin()} 
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-center text-xl outline-none mb-4 focus:border-green-500" 
+              placeholder="••••" 
+              autoFocus
+            />
             <button onClick={handleAdminLogin} className="w-full bg-slate-900 text-white rounded-xl py-3 text-xs font-black uppercase mb-2 tracking-widest hover:bg-slate-800">로그인</button>
-            <button onClick={()=>setShowAdminModal(false)} className="text-slate-300 text-[9px] uppercase font-black hover:text-slate-400 transition-colors">닫기</button>
+            <button onClick={()=>setShowAdminModal(false)} className="text-slate-300 text-[9px] uppercase font-black">닫기</button>
           </div>
         </div>
       )}
 
+      {/* Hall of Fame Add Modal */}
       {isAddingHall && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
           <div className="bg-white rounded-[32px] p-10 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
-            <h2 className="text-xl font-black italic uppercase mb-6 flex items-center gap-2">내역 추가</h2>
+            <h2 className="text-xl font-black italic uppercase mb-6">내역 추가</h2>
             <div className="space-y-4">
               <div className="flex bg-slate-100 p-1 rounded-xl">
-                <button onClick={()=>setNewHallItem({...newHallItem, type:'cash'})} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${newHallItem.type==='cash' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400'}`}>현금 후원</button>
-                <button onClick={()=>setNewHallItem({...newHallItem, type:'item'})} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${newHallItem.type==='item' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-400'}`}>물품 협찬</button>
+                <button onClick={()=>setNewHallItem({...newHallItem, type:'cash'})} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase ${newHallItem.type==='cash' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400'}`}>현금 후원</button>
+                <button onClick={()=>setNewHallItem({...newHallItem, type:'item'})} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase ${newHallItem.type==='item' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-400'}`}>물품 협찬</button>
               </div>
-              <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:border-green-500" placeholder="성함 (또는 팀명)" value={newHallItem.name} onChange={e=>setNewHallItem({...newHallItem, name:e.target.value})}/>
+              <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none" placeholder="성함" value={newHallItem.name} onChange={e=>setNewHallItem({...newHallItem, name:e.target.value})}/>
               {newHallItem.type === 'cash' ? (
-                <input type="number" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:border-green-500" placeholder="후원 금액 (숫자만)" value={newHallItem.amount} onChange={e=>setNewHallItem({...newHallItem, amount:e.target.value})}/>
+                <input type="number" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none" placeholder="후원 금액" value={newHallItem.amount} onChange={e=>setNewHallItem({...newHallItem, amount:e.target.value})}/>
               ) : (
-                <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:border-green-500" placeholder="협찬 물품명" value={newHallItem.item} onChange={e=>setNewHallItem({...newHallItem, item:e.target.value})}/>
+                <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none" placeholder="협찬 물품명" value={newHallItem.item} onChange={e=>setNewHallItem({...newHallItem, item:e.target.value})}/>
               )}
               <div className="flex gap-2 pt-4">
-                <button onClick={addHallItem} className="flex-1 bg-slate-900 text-white rounded-xl py-4 text-xs font-black uppercase hover:bg-slate-800 shadow-lg">추가하기</button>
-                <button onClick={()=>setIsAddingHall(false)} className="px-6 bg-slate-100 text-slate-400 rounded-xl text-xs font-black uppercase hover:bg-slate-200">취소</button>
+                <button onClick={async () => {
+                   if (!db || !newHallItem.name) return;
+                   await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'hall'), { ...newHallItem, timestamp: Date.now() });
+                   setIsAddingHall(false);
+                   setNewHallItem({ name: '', amount: '', type: 'cash', item: '' });
+                }} className="flex-1 bg-slate-900 text-white rounded-xl py-4 text-xs font-black uppercase">추가</button>
+                <button onClick={()=>setIsAddingHall(false)} className="px-6 bg-slate-100 text-slate-400 rounded-xl text-xs font-black uppercase">취소</button>
               </div>
             </div>
           </div>
@@ -501,14 +490,9 @@ export default function App() {
 
       <style>{`
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-        body { font-family: 'Pretendard', sans-serif; }
+        body { font-family: 'Pretendard', sans-serif; margin: 0; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slide-in-from-bottom-4 { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .animate-in { animation-duration: 0.3s; animation-fill-mode: both; }
-        .fade-in { animation-name: fade-in; }
-        .slide-in-from-bottom-4 { animation-name: slide-in-from-bottom-4; }
       `}</style>
     </div>
   );
