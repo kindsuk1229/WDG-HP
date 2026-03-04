@@ -3,562 +3,434 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>우동골 시즌 6 - 통합 관리 시스템</title>
-    <!-- CSS & Fonts -->
+    <title>우동골 시즌 6 - 선수 관리 시스템</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         body { font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
-        
-        /* 섹션 가시성 제어 - !important를 추가하여 강제 적용 보장 */
-        .view-section { display: none !important; opacity: 0; }
-        .view-section.active { display: block !important; opacity: 1; animation: fadeIn 0.3s ease-out forwards; }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
+        .view-section { display: none; opacity: 0; }
+        .view-section.active { display: block; opacity: 1; animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .nav-btn.active { color: #16a34a !important; background-color: #f0fdf4 !important; border-radius: 0.75rem; }
-        .admin-only-ui { display: none !important; }
-        .admin-only-ui.show { display: flex !important; }
-        
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .admin-only { display: none; }
+        body.is-admin .admin-only { display: block; }
+        .admin-editable:hover { outline: 2px dashed #16a34a; cursor: pointer; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 pb-24 md:pb-0 overflow-x-hidden">
+<body class="bg-slate-50 text-slate-900 pb-24 md:pb-0">
 
-    <!-- Desktop Sidebar -->
-    <nav class="hidden md:flex flex-col w-20 bg-white border-r border-slate-200 items-center py-10 gap-8 fixed h-full z-[60]">
-        <div class="text-green-600 font-black italic text-xl cursor-pointer" onclick="window.changeView('home')">UDG</div>
-        <button onclick="window.changeView('home')" class="nav-btn p-3 text-slate-400 active" id="nav-home"><i data-lucide="home"></i></button>
-        <button onclick="window.changeView('register')" class="nav-btn p-3 text-slate-400 admin-only-ui" id="nav-register"><i data-lucide="user-plus"></i></button>
-        <button onclick="window.changeView('draft')" class="nav-btn p-3 text-slate-400" id="nav-draft"><i data-lucide="layout-grid"></i></button>
-        <button onclick="window.changeView('hall')" class="nav-btn p-3 text-slate-400" id="nav-hall"><i data-lucide="heart"></i></button>
-        <button onclick="window.toggleAdminAuth()" class="mt-auto p-3 rounded-xl bg-slate-100 text-slate-400" id="admin-indicator"><i data-lucide="lock"></i></button>
+    <!-- Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around py-4 z-[60] shadow-lg md:top-0 md:bottom-auto md:border-b md:border-t-0">
+        <button onclick="window.changeView('home')" class="nav-btn p-2 text-slate-400 active" id="nav-home"><i data-lucide="home"></i></button>
+        <button onclick="window.changeView('players')" class="nav-btn p-2 text-slate-400" id="nav-players"><i data-lucide="users"></i></button>
+        <button onclick="window.changeView('draft')" class="nav-btn p-2 text-slate-400" id="nav-draft"><i data-lucide="layout-grid"></i></button>
+        <button onclick="window.changeView('hall')" class="nav-btn p-2 text-slate-400" id="nav-hall"><i data-lucide="heart"></i></button>
+        <button onclick="window.toggleAdminAuth()" class="p-2 text-slate-400" id="admin-indicator"><i data-lucide="lock"></i></button>
     </nav>
 
-    <!-- Mobile Bottom Bar -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around py-4 z-[60] shadow-lg">
-        <button onclick="window.changeView('home')" class="nav-btn p-2 text-slate-400 active" id="m-nav-home"><i data-lucide="home"></i></button>
-        <button onclick="window.changeView('register')" class="nav-btn p-2 text-slate-400 admin-only-ui" id="m-nav-register"><i data-lucide="user-plus"></i></button>
-        <button onclick="window.changeView('draft')" class="nav-btn p-2 text-slate-400" id="m-nav-draft"><i data-lucide="layout-grid"></i></button>
-        <button onclick="window.changeView('hall')" class="nav-btn p-2 text-slate-400" id="m-nav-hall"><i data-lucide="heart"></i></button>
-        <button onclick="window.toggleAdminAuth()" class="p-2 text-slate-400" id="m-admin-indicator"><i data-lucide="lock"></i></button>
-    </nav>
-
-    <!-- Main Content Area -->
-    <main class="md:ml-20 p-4 md:p-10 max-w-6xl mx-auto min-h-screen">
+    <main class="p-4 md:pt-24 max-w-4xl mx-auto min-h-screen">
         
-        <!-- Admin Badge -->
-        <div id="admin-badge" class="hidden mb-6 items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-2xl w-fit">
-            <i data-lucide="shield-check" size="14" class="text-green-400"></i>
-            <span id="admin-role-text" class="text-[10px] font-black uppercase tracking-widest">Admin</span>
-        </div>
-
         <!-- Section: Home -->
         <section id="view-home" class="view-section active">
-            <header class="mb-8">
-                <div class="inline-flex items-center bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold mb-3 italic uppercase border border-green-200">Season 6</div>
-                <h1 class="text-4xl md:text-6xl font-black italic tracking-tighter leading-tight text-slate-900 uppercase">
-                    22:22 Best Score<br/><span class="text-green-600">Match Play</span>
+            <header class="mb-6 text-center md:text-left">
+                <div class="inline-flex items-center bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold mb-3 italic uppercase border border-green-200 tracking-wider">Season 6 Match Play</div>
+                <h1 class="text-3xl font-black italic tracking-tighter leading-tight text-slate-900 uppercase">
+                    22대22<br/><span class="text-green-600 text-4xl">베스트스코어 매치플레이</span>
                 </h1>
             </header>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div class="bg-slate-900 rounded-3xl p-6 text-white relative overflow-hidden h-44 flex flex-col justify-end shadow-xl">
-                    <h3 class="text-slate-400 text-[10px] font-bold uppercase mb-1 italic">Tournament Date</h3>
-                    <p class="text-xl font-bold leading-tight">2026. 03. 29 (SUN)<br><span class="text-green-400 italic font-black">Shinedale CC</span></p>
-                    <i data-lucide="calendar" class="absolute -top-4 -right-4 w-32 h-32 text-white/5 pointer-events-none"></i>
-                </div>
-                <div class="bg-white border border-slate-200 rounded-3xl p-6 flex flex-col justify-center relative shadow-sm h-44">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="flex items-center gap-2 text-slate-400"><i data-lucide="megaphone" size="14"></i><span class="text-[10px] font-bold uppercase tracking-wider">Notice</span></div>
-                        <button onclick="window.openNoticeEditor()" class="admin-only-ui text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">편집</button>
+            <!-- Admin Editable Notice -->
+            <div onclick="window.uiActions.editNotice()" class="bg-slate-900 rounded-3xl p-6 text-white mb-4 shadow-xl relative overflow-hidden transition-all active:scale-[0.98]" id="notice-container">
+                <p class="text-slate-400 text-[10px] font-bold uppercase mb-1 flex items-center gap-1">
+                    <i data-lucide="megaphone" class="w-3 h-3"></i> Notice
+                </p>
+                <p id="notice-text" class="text-lg font-bold italic leading-snug">"실력보다 매너, 스코어보다 우정"</p>
+                <div id="notice-edit-hint" class="hidden absolute top-2 right-4 text-[8px] font-bold text-green-400">TAP TO EDIT</div>
+                <i data-lucide="flag" class="absolute -bottom-4 -right-4 w-24 h-24 text-white/5 pointer-events-none"></i>
+            </div>
+
+            <!-- Schedule & Location Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="bg-blue-50 text-blue-600 p-3 rounded-xl"><i data-lucide="map-pin"></i></div>
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase">Location</p>
+                        <p class="text-base font-black text-slate-800">샤인데일CC</p>
                     </div>
-                    <p id="notice-text" class="text-lg font-bold text-slate-800 italic leading-snug">"실력보다 매너, 스코어보다 우정"</p>
+                </div>
+                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="bg-orange-50 text-orange-600 p-3 rounded-xl"><i data-lucide="calendar"></i></div>
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase">Schedule (03.29 SUN)</p>
+                        <p class="text-[13px] font-bold text-slate-800 leading-tight">11:00 식사 / 13:10~ 티오프</p>
+                    </div>
                 </div>
             </div>
 
-            <div class="bg-amber-50 rounded-3xl p-6 border border-amber-100 relative">
+            <div class="bg-amber-50 rounded-3xl p-6 border border-amber-100 mb-6">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-2">
-                        <i data-lucide="heart" class="text-amber-500 fill-amber-500" size="18"></i>
-                        <h3 class="font-black italic uppercase text-amber-800 tracking-tight text-sm">Sponsorship</h3>
+                        <div class="bg-amber-100 p-1.5 rounded-lg text-amber-600"><i data-lucide="gift" class="w-4 h-4"></i></div>
+                        <h3 class="font-black italic uppercase text-amber-800 text-sm">Sponsorship</h3>
                     </div>
-                    <button onclick="window.changeView('hall')" class="text-[10px] font-black text-amber-600 bg-white px-3 py-1 rounded-full border border-amber-200 shadow-sm">전체보기</button>
+                    <button onclick="window.changeView('hall')" class="text-[10px] font-black text-amber-600 hover:underline">전체보기</button>
                 </div>
                 <div id="home-sponsor-list" class="flex gap-3 overflow-x-auto hide-scroll pb-1"></div>
+            </div>
+        </section>
+
+        <!-- Section: Players -->
+        <section id="view-players" class="view-section">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-black italic uppercase tracking-tighter">Player List</h2>
+                <span id="player-count" class="bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded-full">0명</span>
+            </div>
+            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div id="player-list-container" class="divide-y divide-slate-100"></div>
             </div>
         </section>
 
         <!-- Section: Draft Board -->
         <section id="view-draft" class="view-section">
             <div class="flex items-center justify-between mb-6">
-                <h2 class="text-2xl font-black italic uppercase tracking-tighter">Team Draft</h2>
+                <h2 class="text-2xl font-black italic uppercase tracking-tighter text-blue-600">Team Draft</h2>
+                <div id="draft-admin-status" class="hidden text-[10px] font-bold text-green-600 bg-green-100 px-3 py-1 rounded-full">관리자 모드 활성</div>
             </div>
-            <div class="grid grid-cols-3 gap-3 mb-6">
-                <div class="bg-rose-500 rounded-2xl p-4 text-white shadow-lg">
-                    <p class="text-[9px] font-black uppercase opacity-70">Jolam Team</p>
-                    <p class="text-3xl font-black italic"><span id="count-jolam">0</span><span class="text-xs opacity-60 ml-1">P</span></p>
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-rose-500 rounded-2xl p-4 text-white shadow-lg relative">
+                    <p class="text-[9px] font-black uppercase opacity-70 mb-2">Jolam Team (<span id="count-jolam">0</span>)</p>
+                    <div id="jolam-team-list" class="text-[10px] font-bold leading-relaxed opacity-90 h-16 overflow-y-auto hide-scroll"></div>
                 </div>
-                <div class="bg-blue-600 rounded-2xl p-4 text-white shadow-lg">
-                    <p class="text-[9px] font-black uppercase opacity-70">Yumki Team</p>
-                    <p class="text-3xl font-black italic"><span id="count-yumki">0</span><span class="text-xs opacity-60 ml-1">P</span></p>
-                </div>
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 text-slate-400">
-                    <p class="text-[9px] font-black uppercase opacity-70">Wait</p>
-                    <p class="text-3xl font-black italic" id="count-pending">0</p>
+                <div class="bg-blue-600 rounded-2xl p-4 text-white shadow-lg relative">
+                    <p class="text-[9px] font-black uppercase opacity-70 mb-2">Yumki Team (<span id="count-yumki">0</span>)</p>
+                    <div id="yumki-team-list" class="text-[10px] font-bold leading-relaxed opacity-90 h-16 overflow-y-auto hide-scroll"></div>
                 </div>
             </div>
-            <div id="draft-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
-        </section>
-
-        <!-- Section: Register -->
-        <section id="view-register" class="view-section">
-             <div class="flex items-center justify-between mb-6">
-                <h2 class="text-2xl font-black italic uppercase tracking-tighter">Player Entry</h2>
-                <span id="total-player-badge" class="bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded-full">0명</span>
-             </div>
-             <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <input id="reg-name" type="text" class="bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm outline-none" placeholder="선수명">
-                    <input id="reg-hcap" type="number" class="bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm outline-none" placeholder="핸디">
-                    <button onclick="window.uiActions.addPlayer()" class="md:col-span-2 bg-green-600 text-white rounded-xl font-black text-xs uppercase py-3 shadow-lg hover:bg-green-700 active:scale-95 transition-all">선수 추가</button>
-                </div>
-                <div id="reg-list" class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-4 border-t border-slate-100"></div>
-            </div>
+            <div id="draft-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 pb-20"></div>
         </section>
 
         <!-- Section: Hall of Fame -->
         <section id="view-hall" class="view-section">
             <h2 class="text-2xl font-black italic uppercase tracking-tighter text-amber-600 mb-6">Hall of Fame</h2>
-            <div id="sponsor-admin-block" class="hidden bg-amber-50 border border-amber-100 rounded-3xl p-4 space-y-3 mb-6">
-                <div class="flex flex-col md:flex-row gap-3">
-                    <input id="hall-spon-user" type="text" class="flex-1 bg-white border border-amber-200 rounded-xl p-3 text-sm font-bold" placeholder="후원자 성함">
-                    <input id="hall-spon-item" type="text" class="flex-1 bg-white border border-amber-200 rounded-xl p-3 text-sm font-bold" placeholder="후원 물품">
-                    <button onclick="window.uiActions.addSponsor()" class="bg-amber-500 text-white px-6 py-3 rounded-xl font-black text-xs uppercase shadow-lg hover:bg-amber-600 active:scale-95 transition-all">등록</button>
+            <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4 mb-8">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">후원 물품 등록</p>
+                <div class="grid grid-cols-1 gap-3">
+                    <input id="hall-spon-user" type="text" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold" placeholder="후원자 성함">
+                    <input id="hall-spon-item" type="text" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold" placeholder="후원 물품">
+                    <button id="btn-add-sponsor" onclick="window.uiActions.addSponsor()" class="bg-amber-500 text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all">등록하기</button>
                 </div>
             </div>
-            <div id="sponsor-list-full" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10"></div>
+            <div id="sponsor-list-full" class="grid grid-cols-1 gap-4 pb-10"></div>
         </section>
 
     </main>
 
-    <!-- UI Custom Modal -->
+    <!-- Modal System -->
     <div id="custom-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-        <div class="bg-white rounded-[32px] p-6 w-full max-w-sm shadow-2xl transition-all">
-            <h3 id="cm-title" class="font-black uppercase mb-2 italic text-sm text-slate-800">알림</h3>
-            <p id="cm-msg" class="text-slate-600 font-bold text-sm mb-6 whitespace-pre-line"></p>
-            
+        <div class="bg-white rounded-[32px] p-6 w-full max-w-sm shadow-2xl">
+            <h3 id="cm-title" class="font-black uppercase mb-2 italic text-sm text-slate-400">알림</h3>
+            <p id="cm-msg" class="text-slate-800 font-bold text-sm mb-6"></p>
             <div id="cm-input-container" class="hidden mb-6">
-                <input id="cm-input" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-sm outline-none">
+                <input id="cm-input" type="password" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-center text-xl tracking-[1em] focus:outline-none focus:border-green-500">
             </div>
-
             <div class="flex gap-2">
-                <button id="cm-cancel" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-black text-xs uppercase hidden">취소</button>
-                <button id="cm-confirm" class="flex-1 bg-green-600 text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg">확인</button>
+                <button id="cm-cancel" onclick="document.getElementById('custom-modal').classList.add('hidden')" class="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-black text-xs uppercase">취소</button>
+                <button id="cm-confirm" class="flex-1 bg-green-600 text-white py-3 rounded-xl font-black text-xs uppercase">확인</button>
             </div>
         </div>
     </div>
 
-    <!-- Admin Login Modal -->
-    <div id="admin-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
-        <div class="bg-white rounded-[40px] p-8 w-full max-w-[280px] text-center shadow-2xl">
-            <h3 class="font-black uppercase mb-4 italic text-sm">Admin Access</h3>
-            <input id="admin-pw" type="password" class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center font-black mb-4 outline-none" placeholder="PIN CODE">
-            <button onclick="window.doLogin()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl">Login</button>
-            <button onclick="document.getElementById('admin-modal').classList.add('hidden')" class="w-full mt-2 text-slate-400 text-[10px] font-bold uppercase">Cancel</button>
-        </div>
-    </div>
-
-    <!-- PART 1: UI Core Script & Local Memory Fallback -->
     <script>
-        // 글로벌 상태 선언
-        window.appState = { view: 'home', role: null, players: [], sponsors: [], config: {}, user: null };
-        const ADMIN_PINS = { '1234': 'jolam', '5678': 'yumki', '0000': 'master' };
+        const INITIAL_PLAYERS = [
+            { name: "낭빠", h: 9.9 }, { name: "세리", h: 15.3 }, { name: "김부장", h: 15.1 }, { name: "버디레몬", h: 19 },
+            { name: "밤또", h: 23 }, { name: "버디펏", h: 14.5 }, { name: "양영빈", h: 21.4 },
+            { name: "모키", h: 14.6 }, { name: "함또", h: 19.9 }, { name: "황조이", h: 20.9 }, { name: "정종하", h: 14.5 },
+            { name: "나무늘보", h: 15.3 }, { name: "비락", h: 17.1 }, { name: "고들빠", h: 11.9 }, { name: "뚱", h: 15.3 },
+            { name: "남관형", h: 22.1 }, { name: "곰둘", h: 18.8 }, { name: "태이틀", h: 9 }, { name: "뽀주니", h: 25 },
+            { name: "찐", h: 19.9 }, { name: "팔오", h: 17.3 }, { name: "으랏챠", h: 12.3 }, { name: "쑤기", h: 24 },
+            { name: "뒤땅", h: 17 }, { name: "털이", h: 12.6 }, { name: "김대표", h: 24.5 },
+            { name: "토니", h: -2 }, { name: "소하", h: 24.3 }, { name: "윤샷", h: 16.5 }, { name: "아띠", h: 13.5 },
+            { name: "벙커", h: 19.5 }, { name: "호이서", h: 10 }, { name: "쭈니", h: 20 },
+            { name: "홍이", h: 19 }, { name: "우기", h: 17 }, { name: "하트", h: 22 }, { name: "로드짱", h: 18 },
+            { name: "최본말", h: 20 }, { name: "최딩딩", h: 25 }, { name: "쇼군", h: 9 }, { name: "찰리심", h: 16 },
+            { name: "예비선수", h: 20 }
+        ];
 
-        // 커스텀 모달 제어 함수
-        window.showModal = (opts) => {
-            const { title = '알림', msg, showInput = false, inputValue = '', showCancel = false, onConfirm } = opts;
-            
-            document.getElementById('cm-title').innerText = title;
-            document.getElementById('cm-msg').innerText = msg;
-            
-            const inputContainer = document.getElementById('cm-input-container');
-            const inputEl = document.getElementById('cm-input');
-            if(showInput) {
-                inputContainer.classList.remove('hidden');
-                inputEl.value = inputValue;
-            } else {
-                inputContainer.classList.add('hidden');
-            }
-
-            const cancelBtn = document.getElementById('cm-cancel');
-            if(showCancel) cancelBtn.classList.remove('hidden');
-            else cancelBtn.classList.add('hidden');
-
-            const confirmBtn = document.getElementById('cm-confirm');
-            confirmBtn.replaceWith(confirmBtn.cloneNode(true));
-            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-            
-            const newConfirmBtn = document.getElementById('cm-confirm');
-            const newCancelBtn = document.getElementById('cm-cancel');
-
-            newConfirmBtn.onclick = () => {
-                document.getElementById('custom-modal').classList.add('hidden');
-                if(onConfirm) onConfirm(showInput ? inputEl.value : true);
-            };
-
-            newCancelBtn.onclick = () => {
-                document.getElementById('custom-modal').classList.add('hidden');
-            };
-
-            document.getElementById('custom-modal').classList.remove('hidden');
+        window.appState = { 
+            view: 'home', 
+            role: null, 
+            players: [], 
+            sponsors: [], 
+            config: { notice: "실력보다 매너, 스코어보다 우정" } 
         };
 
-        // UI 탭 전환 로직
+        const ADMIN_PIN = '0101'; // 통합 관리자 비밀번호
+
         window.changeView = (v) => {
-            if(v === 'register' && window.appState.role !== 'master') {
-                window.showModal({ msg: '마스터 관리자 전용 메뉴입니다.' });
-                return;
-            }
             window.appState.view = v;
-            
             document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
-            const target = document.getElementById(`view-${v}`);
-            if(target) target.classList.add('active');
-
+            document.getElementById(`view-${v}`).classList.add('active');
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll(`#nav-${v}, #m-nav-${v}`).forEach(btn => btn.classList.add('active'));
-
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            document.getElementById(`nav-${v}`).classList.add('active');
+            window.renderUI();
             if(window.lucide) window.lucide.createIcons();
         };
 
         window.toggleAdminAuth = () => {
             if(window.appState.role) {
+                window.appState.role = null;
+                document.body.classList.remove('is-admin');
+                window.showModal({ msg: '로그아웃 되었습니다.' });
+                window.renderUI();
+            } else {
                 window.showModal({
-                    msg: '로그아웃 하시겠습니까?',
-                    showCancel: true,
-                    onConfirm: () => {
-                        window.appState.role = null;
-                        if(window.appState.view === 'register') window.changeView('home');
-                        window.renderUI();
+                    title: '관리자 인증',
+                    msg: '관리자 핀 코드를 입력하세요.',
+                    showInput: true,
+                    onConfirm: (val) => {
+                        if(val === ADMIN_PIN) {
+                            window.appState.role = 'admin';
+                            document.body.classList.add('is-admin');
+                            window.renderUI();
+                            window.showModal({ msg: '관리자(염키/졸람/마스터) 권한이 승인되었습니다.' });
+                        } else {
+                            window.showModal({ msg: '비밀번호가 틀렸습니다.' });
+                        }
                     }
                 });
-            } else {
-                document.getElementById('admin-modal').classList.remove('hidden');
-                document.getElementById('admin-pw').value = '';
-                document.getElementById('admin-pw').focus();
             }
         };
 
-        window.doLogin = () => {
-            const pin = document.getElementById('admin-pw').value;
-            if(ADMIN_PINS[pin]) {
-                window.appState.role = ADMIN_PINS[pin];
-                document.getElementById('admin-modal').classList.add('hidden');
-                window.renderUI();
-            } else {
-                window.showModal({ msg: '비밀번호가 틀렸습니다.' });
-            }
-        };
-
-        // 데이터베이스 대체용 메모리 객체 (DB 로딩 실패/지연 시 무조건 작동하게 보장)
-        window.dbActions = {
-            addPlayer: (name, h) => {
-                window.appState.players.push({ id: Date.now().toString(), name, h, t: 'none' });
-                window.renderUI();
-            },
-            deletePlayer: (id) => {
-                window.appState.players = window.appState.players.filter(p => p.id !== id);
-                window.renderUI();
-            },
-            setTeam: (id, team) => {
-                const p = window.appState.players.find(p => p.id === id);
-                if(p) p.t = team;
-                window.renderUI();
-            },
-            addSponsor: (user, item) => {
-                window.appState.sponsors.push({ id: Date.now().toString(), user, item });
-                window.renderUI();
-            },
-            deleteSponsor: (id) => {
-                window.appState.sponsors = window.appState.sponsors.filter(s => s.id !== id);
-                window.renderUI();
-            },
-            updateNotice: (notice) => {
-                window.appState.config.notice = notice;
-                const noticeEl = document.getElementById('notice-text');
-                if(noticeEl) noticeEl.innerText = notice;
-            }
-        };
-
-        // UI 이벤트 액션 바인딩
-        window.uiActions = {
-            addPlayer: () => {
-                const name = document.getElementById('reg-name').value.trim();
-                const h = Number(document.getElementById('reg-hcap').value) || 0;
-                
-                if(!name) {
-                    window.showModal({ msg: '선수명을 입력해주세요.' });
-                    return;
-                }
-                
-                window.dbActions.addPlayer(name, h);
-                document.getElementById('reg-name').value = "";
-                document.getElementById('reg-hcap').value = "";
-            },
-            deletePlayer: (id) => {
-                if(window.appState.role === 'master') {
-                    window.showModal({ msg: '이 선수를 삭제하시겠습니까?', showCancel: true, onConfirm: () => {
-                        window.dbActions.deletePlayer(id);
-                    }});
-                }
-            },
-            setTeam: (id, team) => {
-                window.dbActions.setTeam(id, team);
-            },
-            addSponsor: () => {
-                const user = document.getElementById('hall-spon-user').value.trim();
-                const item = document.getElementById('hall-spon-item').value.trim();
-                
-                if(!user || !item) {
-                    window.showModal({ msg: '후원자 성함과 후원 물품을 모두 입력해주세요.' });
-                    return;
-                }
-
-                window.dbActions.addSponsor(user, item);
-                document.getElementById('hall-spon-user').value = "";
-                document.getElementById('hall-spon-item').value = "";
-            },
-            deleteSponsor: (id) => {
-                if(window.appState.role === 'master') {
-                    window.showModal({ msg: '이 후원 내역을 삭제하시겠습니까?', showCancel: true, onConfirm: () => {
-                        window.dbActions.deleteSponsor(id);
-                    }});
-                }
-            }
-        };
-
-        window.openNoticeEditor = () => {
-            window.showModal({
-                title: '공지사항 편집',
-                msg: '새로운 공지사항을 입력하세요.',
-                showInput: true,
-                inputValue: window.appState.config.notice || '',
-                showCancel: true,
-                onConfirm: (val) => {
-                    if(val) window.dbActions.updateNotice(val);
-                }
-            });
-        };
-
-        // UI 렌더링 함수
-        window.renderUI = () => {
-            const isAnyAdmin = !!window.appState.role;
-            const isMaster = window.appState.role === 'master';
-
-            document.querySelectorAll('.admin-only-ui').forEach(el => {
-                if(el.id && el.id.includes('register')) el.classList.toggle('show', isMaster);
-                else el.classList.toggle('show', isAnyAdmin);
-            });
-
-            const badge = document.getElementById('admin-badge');
-            if(badge) {
-                if(isAnyAdmin) {
-                    badge.style.display = 'flex';
-                    document.getElementById('admin-role-text').innerText = `${window.appState.role} admin`;
-                } else {
-                    badge.style.display = 'none';
-                }
-            }
-
-            const indicators = [document.getElementById('admin-indicator'), document.getElementById('m-admin-indicator')];
-            indicators.forEach(i => {
-                if(!i) return;
-                i.innerHTML = `<i data-lucide="${isAnyAdmin ? 'unlock' : 'lock'}"></i>`;
-                i.className = `p-3 rounded-xl transition-all ${isAnyAdmin ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`;
-            });
-
-            document.getElementById('sponsor-admin-block').classList.toggle('hidden', !isMaster);
-
-            window.renderPlayerLists();
-            window.renderSponsors();
-            if(window.lucide) window.lucide.createIcons();
-        };
-
-        window.renderPlayerLists = () => {
-            const regList = document.getElementById('reg-list');
-            const draftGrid = document.getElementById('draft-grid');
-            if(!regList || !draftGrid) return;
-
-            document.getElementById('total-player-badge').innerText = `${window.appState.players.length}명`;
+        window.showModal = ({ title='알림', msg, showInput=false, onConfirm }) => {
+            const m = document.getElementById('custom-modal');
+            document.getElementById('cm-title').innerText = title;
+            document.getElementById('cm-msg').innerText = msg;
+            const inputCont = document.getElementById('cm-input-container');
+            const input = document.getElementById('cm-input');
+            inputCont.classList.toggle('hidden', !showInput);
+            input.value = '';
             
-            const trashSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`;
+            const confirm = document.getElementById('cm-confirm');
+            confirm.onclick = () => {
+                m.classList.add('hidden');
+                if(onConfirm) onConfirm(input.value);
+            };
+            m.classList.remove('hidden');
+        };
 
-            regList.innerHTML = [...window.appState.players].sort((a,b) => (a.h||0)-(b.h||0)).map(p => `
-                <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                    <span class="font-bold text-slate-700">${p.name} <span class="text-[10px] text-slate-400 ml-1">H${p.h}</span></span>
-                    <button onclick="window.uiActions.deletePlayer('${p.id}')" class="text-slate-300 hover:text-red-500">${trashSvg}</button>
-                </div>
-            `).join('');
+        window.renderUI = () => {
+            const isAdmin = !!window.appState.role;
+            
+            // Notice Render
+            document.getElementById('notice-text').innerText = window.appState.config.notice || "실력보다 매너, 스코어보다 우정";
+            const noticeEditHint = document.getElementById('notice-edit-hint');
+            const noticeContainer = document.getElementById('notice-container');
+            noticeEditHint.classList.toggle('hidden', !isAdmin);
+            noticeContainer.classList.toggle('admin-editable', isAdmin);
 
-            let counts = { jolam: 0, yumki: 0, none: 0 };
-            draftGrid.innerHTML = [...window.appState.players].sort((a,b) => (a.h||0)-(b.h||0)).map(p => {
-                const team = p.t || 'none';
-                counts[team]++;
-                const cardClass = team === 'jolam' ? 'border-2 border-rose-500 bg-rose-50' : (team === 'yumki' ? 'border-2 border-blue-600 bg-blue-50' : 'bg-white border border-slate-200');
-                const canSelectJolam = window.appState.role === 'master' || window.appState.role === 'jolam';
-                const canSelectYumki = window.appState.role === 'master' || window.appState.role === 'yumki';
-
-                return `
-                <div class="${cardClass} p-4 rounded-2xl flex flex-col justify-between h-32 shadow-sm transition-all">
-                    <div>
-                        <span class="text-lg font-black text-slate-800 truncate block">${p.name}</span>
-                        <span class="text-[10px] font-black italic text-slate-400 uppercase">Handicap: ${p.h||0}</span>
+            document.getElementById('player-count').innerText = `${window.appState.players.length}명`;
+            document.getElementById('draft-admin-status').classList.toggle('hidden', !isAdmin);
+            
+            // Player List
+            const list = document.getElementById('player-list-container');
+            list.innerHTML = [...window.appState.players].sort((a,b) => (a.h||0) - (b.h||0)).map(p => `
+                <div class="flex items-center justify-between p-5 hover:bg-slate-50 transition-colors">
+                    <div class="flex flex-col">
+                        <span class="font-black text-slate-800">${p.name}</span>
+                        <span class="text-[9px] font-bold ${p.t === 'jolam' ? 'text-rose-500' : p.t === 'yumki' ? 'text-blue-600' : 'text-slate-400'} uppercase">TEAM: ${(p.t || 'NONE').toUpperCase()}</span>
                     </div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-right">
+                            <p class="text-[9px] font-black text-slate-400 uppercase">Handicap</p>
+                            <p class="text-lg font-black text-green-600">${p.h || 0}</p>
+                        </div>
+                        ${isAdmin ? `<button onclick="window.uiActions.editHandicap('${p.id}', ${p.h || 0})" class="bg-slate-100 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-bold">수정</button>` : ''}
+                    </div>
+                </div>
+            `).join('') || '<div class="p-8 text-center text-slate-400 italic">데이터를 불러오는 중입니다...</div>';
+
+            // Draft Logic
+            const jolamPlayers = window.appState.players.filter(p => p.t === 'jolam').map(p => p.name);
+            const yumkiPlayers = window.appState.players.filter(p => p.t === 'yumki').map(p => p.name);
+            document.getElementById('count-jolam').innerText = jolamPlayers.length;
+            document.getElementById('count-yumki').innerText = yumkiPlayers.length;
+            document.getElementById('jolam-team-list').innerText = jolamPlayers.join(', ') || '팀원이 없습니다.';
+            document.getElementById('yumki-team-list').innerText = yumkiPlayers.join(', ') || '팀원이 없습니다.';
+
+            const draftGrid = document.getElementById('draft-grid');
+            const sortedDraft = [...window.appState.players].sort((a, b) => {
+                const aSelected = a.t !== 'none';
+                const bSelected = b.t !== 'none';
+                if (aSelected !== bSelected) return aSelected ? 1 : -1;
+                return (a.h || 0) - (b.h || 0);
+            });
+            draftGrid.innerHTML = sortedDraft.map(p => {
+                const isJ = p.t === 'jolam';
+                const isY = p.t === 'yumki';
+                return `
+                <div class="p-4 rounded-2xl flex flex-col justify-between h-28 border-2 transition-all duration-300 ${isJ ? 'border-rose-500 bg-rose-50' : isY ? 'border-blue-600 bg-blue-50' : 'border-slate-100 bg-white shadow-sm'}">
+                    <span class="font-black text-slate-800 truncate leading-tight">${p.name}<br/><span class="text-[10px] font-bold text-green-600">H ${p.h||0}</span></span>
                     <div class="flex gap-1">
-                        ${canSelectJolam ? `<button onclick="window.uiActions.setTeam('${p.id}', '${team === 'jolam' ? 'none' : 'jolam'}')" class="flex-1 py-1 rounded-lg text-[8px] font-black ${team === 'jolam' ? 'bg-rose-500 text-white' : 'bg-white border border-slate-200'}">JOLAM</button>` : ''}
-                        ${canSelectYumki ? `<button onclick="window.uiActions.setTeam('${p.id}', '${team === 'yumki' ? 'none' : 'yumki'}')" class="flex-1 py-1 rounded-lg text-[8px] font-black ${team === 'yumki' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200'}">YUMKI</button>` : ''}
+                        <button onclick="window.uiActions.setTeam('${p.id}', 'jolam')" class="flex-1 py-1 rounded-lg text-[8px] font-black ${isJ ? 'bg-rose-500 text-white shadow-md' : 'bg-slate-100 text-slate-400 active:scale-95'} ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}">JOLAM</button>
+                        <button onclick="window.uiActions.setTeam('${p.id}', 'yumki')" class="flex-1 py-1 rounded-lg text-[8px] font-black ${isY ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-400 active:scale-95'} ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}">YUMKI</button>
                     </div>
                 </div>`;
             }).join('');
-
-            document.getElementById('count-jolam').innerText = counts.jolam;
-            document.getElementById('count-yumki').innerText = counts.yumki;
-            document.getElementById('count-pending').innerText = counts.none;
-        };
-
-        window.renderSponsors = () => {
-            const homeList = document.getElementById('home-sponsor-list');
-            const fullList = document.getElementById('sponsor-list-full');
-            const trashSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`;
-            const giftSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>`;
             
-            if(homeList) {
-                homeList.innerHTML = window.appState.sponsors.length ? window.appState.sponsors.map(s => `
-                    <div class="bg-white min-w-[140px] p-3 rounded-2xl border border-amber-200 shadow-sm flex flex-col">
-                        <span class="text-[9px] font-black text-amber-600 uppercase mb-1">${s.user}님</span>
-                        <span class="text-[11px] font-bold text-slate-800 line-clamp-1">${s.item}</span>
-                    </div>
-                `).join('') : '<p class="text-slate-400 text-xs italic">등록된 후원이 없습니다.</p>';
-            }
+            // Sponsors
+            const homeSpon = document.getElementById('home-sponsor-list');
+            homeSpon.innerHTML = window.appState.sponsors.length ? window.appState.sponsors.slice(0, 10).map(s => `
+                <div class="bg-white min-w-[140px] p-3 rounded-2xl border border-amber-200 shadow-sm flex flex-col shrink-0">
+                    <span class="text-[9px] font-black text-amber-600 uppercase mb-1 flex items-center gap-1"><i data-lucide="award" class="w-2.5 h-2.5"></i> ${s.user}님</span>
+                    <span class="text-[11px] font-bold text-slate-800 truncate">${s.item}</span>
+                </div>
+            `).join('') : '<p class="text-slate-400 text-[10px] italic">등록된 후원이 없습니다.</p>';
 
-            if(fullList) {
-                fullList.innerHTML = window.appState.sponsors.map(s => `
-                    <div class="bg-white rounded-3xl p-5 border border-slate-200 flex items-start gap-4 shadow-sm">
-                        <div class="p-3 bg-amber-100 text-amber-600 rounded-2xl">${giftSvg}</div>
-                        <div class="flex-1">
-                            <h4 class="text-xs font-black text-slate-400 uppercase mb-1">${s.user}님</h4>
-                            <p class="text-base font-bold text-slate-800">${s.item}</p>
-                        </div>
-                        ${window.appState.role === 'master' ? `<button onclick="window.uiActions.deleteSponsor('${s.id}')" class="text-slate-200 hover:text-red-500">${trashSvg}</button>` : ''}
+            const fullSpon = document.getElementById('sponsor-list-full');
+            fullSpon.innerHTML = window.appState.sponsors.map(s => `
+                <div class="bg-white rounded-3xl p-5 border border-slate-200 flex items-center gap-4 shadow-sm">
+                    <div class="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center font-black text-xs">${(s.user || '?')[0]}</div>
+                    <div class="flex-1">
+                        <h4 class="text-[10px] font-black text-slate-400 uppercase">${s.user}님</h4>
+                        <p class="text-sm font-bold text-slate-800">${s.item}</p>
                     </div>
-                `).join('');
-            }
+                    ${isAdmin ? `<button onclick="window.uiActions.deleteSponsor('${s.id}')" class="text-rose-300 p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+                </div>
+            `).join('');
+
+            const indicator = document.getElementById('admin-indicator');
+            indicator.className = `p-2 ${isAdmin ? 'text-green-600' : 'text-slate-400'}`;
+            if(window.lucide) window.lucide.createIcons();
         };
 
-        // 초기 아이콘 로드
-        window.addEventListener('load', () => {
-            setTimeout(() => { if(window.lucide) window.lucide.createIcons(); }, 300);
-        });
+        window.uiActions = {
+            editHandicap: () => {}, setTeam: () => {}, addSponsor: () => {}, deleteSponsor: () => {}, editNotice: () => {}
+        };
     </script>
 
-    <!-- PART 2: Firebase Module (DB 연결 성공 시 기존 메모리 함수를 덮어씌움) -->
+    <!-- Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, collection, addDoc, updateDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, getDocs, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        let app, db, auth;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'udg-v6-stable';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'udg-v6-secure';
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
 
-        try {
-            const configStr = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
-            if (configStr && configStr !== '{}') {
-                const firebaseConfig = JSON.parse(configStr);
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
+        let currentUser = null;
+
+        const initApp = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
             }
-        } catch(e) {
-            console.warn("Firebase config not found. Running in Local Memory Mode.");
-        }
-
-        if(db && auth) {
-            // DB 연결에 성공했을 때만 로컬 메모리 함수들을 실제 Firebase 통신 함수로 교체합니다.
-            window.dbActions = {
-                addPlayer: async (name, h) => {
-                    if(!window.appState.user) return;
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'players'), { name, h, t: 'none', createdAt: Date.now() });
-                },
-                deletePlayer: async (id) => {
-                    if(!window.appState.user) return;
-                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id));
-                },
-                setTeam: async (id, team) => {
-                    if(!window.appState.user) return;
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { t: team });
-                },
-                addSponsor: async (user, item) => {
-                    if(!window.appState.user) return;
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'sponsors'), { user, item, createdAt: Date.now() });
-                },
-                deleteSponsor: async (id) => {
-                    if(!window.appState.user) return;
-                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sponsors', id));
-                },
-                updateNotice: async (notice) => {
-                    if(!window.appState.user) return;
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), { notice }, { merge: true });
+            onAuthStateChanged(auth, async (user) => {
+                currentUser = user;
+                if (user) {
+                    await checkAndSeedData();
+                    startListening();
+                    setupActions();
                 }
-            };
+            });
+        };
 
-            const startSync = () => {
-                if (!window.appState.user) return;
-                const errCb = (err) => console.error("Firestore Sync Error:", err);
+        const checkAndSeedData = async () => {
+            const playersCol = collection(db, 'artifacts', appId, 'public', 'data', 'players');
+            const snapshot = await getDocs(playersCol);
+            if (snapshot.empty) {
+                for (const p of INITIAL_PLAYERS) {
+                    await addDoc(playersCol, { ...p, t: 'none', updatedAt: Date.now() });
+                }
+            }
+        };
 
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (s) => {
-                    window.appState.players = s.docs.map(d => ({id: d.id, ...d.data()}));
-                    window.renderUI();
-                }, errCb);
+        const startListening = () => {
+            if (!currentUser) return;
+            const playersCol = collection(db, 'artifacts', appId, 'public', 'data', 'players');
+            const sponsorsCol = collection(db, 'artifacts', appId, 'public', 'data', 'sponsors');
+            const configDoc = doc(db, 'artifacts', appId, 'public', 'data', 'appConfig', 'global');
 
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sponsors'), (s) => {
-                    window.appState.sponsors = s.docs.map(d => ({id: d.id, ...d.data()}));
-                    window.renderUI();
-                }, errCb);
-
-                onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), (d) => {
-                    if(d.exists()) {
-                        window.appState.config = d.data();
-                        const noticeEl = document.getElementById('notice-text');
-                        if(noticeEl) noticeEl.innerText = window.appState.config.notice || "실력보다 매너, 스코어보다 우정";
-                    }
-                }, errCb);
-            };
-
-            onAuthStateChanged(auth, (u) => {
-                window.appState.user = u;
-                if (u) startSync();
+            onSnapshot(playersCol, (s) => {
+                window.appState.players = s.docs.map(d => ({id: d.id, ...d.data()}));
+                window.renderUI();
             });
 
-            const initAuth = async () => {
-                try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
+            onSnapshot(sponsorsCol, (s) => {
+                window.appState.sponsors = s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+                window.renderUI();
+            });
+
+            onSnapshot(configDoc, (d) => {
+                if(d.exists()) {
+                    window.appState.config = d.data();
+                    window.renderUI();
+                }
+            });
+        };
+
+        const setupActions = () => {
+            window.uiActions.editNotice = async () => {
+                if(!window.appState.role) return;
+                window.showModal({
+                    title: '공지 수정',
+                    msg: '변경할 공지 문구를 입력하세요.',
+                    showInput: true,
+                    onConfirm: async (val) => {
+                        if(val.trim()) {
+                            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appConfig', 'global'), { notice: val.trim() }, { merge: true });
+                        }
                     }
-                } catch (e) {
-                    console.error("Auth Error:", e);
+                });
+            };
+
+            window.uiActions.editHandicap = async (id, currentH) => {
+                if (!window.appState.role) return;
+                window.showModal({
+                    title: 'HCP 수정',
+                    msg: '숫자만 입력하세요.',
+                    showInput: true,
+                    onConfirm: async (val) => {
+                        const h = parseFloat(val);
+                        if(!isNaN(h)) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { h });
+                    }
+                });
+            };
+
+            window.uiActions.setTeam = async (id, team) => {
+                if (!window.appState.role) {
+                    window.showModal({ msg: '팀 드래프트는 관리자만 가능합니다.' });
+                    return;
+                }
+                const p = window.appState.players.find(x => x.id === id);
+                if(p) {
+                    const newTeam = p.t === team ? 'none' : team;
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), { t: newTeam });
                 }
             };
-            initAuth();
-        }
+
+            window.uiActions.addSponsor = async () => {
+                const user = document.getElementById('hall-spon-user').value.trim();
+                const item = document.getElementById('hall-spon-item').value.trim();
+                if(!user || !item) return window.showModal({ msg: '내용을 모두 입력하세요.' });
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'sponsors'), { user, item, createdAt: Date.now() });
+                document.getElementById('hall-spon-user').value = '';
+                document.getElementById('hall-spon-item').value = '';
+            };
+
+            window.uiActions.deleteSponsor = async (id) => {
+                if (!window.appState.role) return;
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sponsors', id));
+            };
+        };
+
+        initApp();
     </script>
 </body>
 </html>
