@@ -19,9 +19,9 @@
 </head>
 <body class="bg-slate-50 text-slate-900 pb-24 md:pb-0">
 
-    <!-- DB 상태 표시기 (디버깅용) -->
-    <div id="status-banner" class="fixed top-0 left-0 right-0 bg-amber-500 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all">
-        데이터베이스 연결 시도 중...
+    <!-- DB 상태 표시기 -->
+    <div id="status-banner" class="fixed top-0 left-0 right-0 bg-slate-800 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all">
+        시스템 초기화 중...
     </div>
 
     <!-- Navigation -->
@@ -37,10 +37,10 @@
         
         <!-- Section: Home -->
         <section id="view-home" class="view-section active">
-            <header class="mb-6 pt-6">
+            <header class="mb-6 pt-6 text-center md:text-left">
                 <div class="inline-block bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold mb-2 uppercase tracking-widest border border-green-200">Season 6 Match</div>
-                <h1 class="text-3xl font-black italic tracking-tighter leading-none text-slate-900 uppercase">
-                    22:22<br/><span class="text-green-600 text-4xl">Best Score Match</span>
+                <h1 class="text-4xl font-black italic tracking-tighter leading-none text-slate-900 uppercase">
+                    22:22<br/><span class="text-green-600 text-5xl">Best Score</span>
                 </h1>
             </header>
             
@@ -64,10 +64,10 @@
             </div>
 
             <div class="bg-amber-50 rounded-[2rem] p-6 border border-amber-100">
-                <h3 class="font-black italic uppercase text-amber-800 text-sm tracking-tight flex items-center gap-2 mb-4">
+                <h3 class="font-black italic uppercase text-amber-800 text-sm tracking-tight flex items-center gap-2 mb-4 text-center md:text-left">
                     <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i> Sponsorship
                 </h3>
-                <div id="home-sponsor-list" class="flex gap-3 overflow-x-auto hide-scroll"></div>
+                <div id="home-sponsor-list" class="flex gap-3 overflow-x-auto hide-scroll pb-2"></div>
             </div>
         </section>
 
@@ -108,7 +108,7 @@
                 <div class="space-y-3">
                     <input id="spon-name" type="text" class="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 ring-amber-500 outline-none" placeholder="기증자 성함">
                     <input id="spon-item" type="text" class="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 ring-amber-500 outline-none" placeholder="후원하실 물품">
-                    <button onclick="addSponsor()" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all active:scale-95">기증 등록하기</button>
+                    <button id="spon-btn" onclick="addSponsor()" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all active:scale-95 disabled:opacity-50">기증 등록하기</button>
                 </div>
             </div>
             <div id="hall-list" class="grid grid-cols-1 gap-4 pb-20"></div>
@@ -132,10 +132,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // --- 초기 플레이어 데이터 ---
         const DEFAULT_PLAYERS = [
             { name: "낭빠", h: 9.9 }, { name: "세리", h: 15.3 }, { name: "김부장", h: 15.1 }, { name: "버디레몬", h: 19 },
             { name: "밤또", h: 23 }, { name: "버디펏", h: 14.5 }, { name: "양영빈", h: 21.4 }, { name: "모키", h: 14.6 },
@@ -157,13 +156,15 @@
             notice: "실력보다 매너, 스코어보다 우정",
             db: null,
             user: null,
-            appId: typeof __app_id !== 'undefined' ? __app_id : 'udonggol-v6-2222'
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'udonggol-v6-final'
         };
 
-        const updateStatus = (msg, colorClass = 'bg-amber-500') => {
+        const updateStatus = (msg, colorClass = 'bg-slate-800') => {
             const banner = document.getElementById('status-banner');
-            banner.innerText = msg;
-            banner.className = `fixed top-0 left-0 right-0 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all ${colorClass}`;
+            if (banner) {
+                banner.innerText = msg;
+                banner.className = `fixed top-0 left-0 right-0 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all ${colorClass}`;
+            }
         };
 
         // --- RENDER ---
@@ -172,7 +173,6 @@
             document.getElementById('edit-indicator').classList.toggle('hidden', !state.isAdmin);
             document.getElementById('notice-text').innerText = state.notice;
 
-            // Player List
             const list = document.getElementById('player-list');
             const sortedPlayers = [...state.players].sort((a,b) => a.h - b.h);
             document.getElementById('player-count-badge').innerText = `${state.players.length} Players`;
@@ -192,7 +192,6 @@
                 </div>
             `).join('');
 
-            // Draft Board (Selected to Bottom)
             const draftGrid = document.getElementById('draft-grid');
             document.getElementById('count-jolam').innerText = state.players.filter(p => p.t === 'jolam').length;
             document.getElementById('count-yumki').innerText = state.players.filter(p => p.t === 'yumki').length;
@@ -217,7 +216,6 @@
                 </div>
             `).join('');
 
-            // Hall of Fame
             const homeSpon = document.getElementById('home-sponsor-list');
             homeSpon.innerHTML = state.sponsors.length ? state.sponsors.map(s => `
                 <div class="bg-white min-w-[140px] p-4 rounded-2xl border border-amber-100 shadow-sm flex items-center gap-3">
@@ -227,7 +225,7 @@
                         <p class="text-[11px] font-bold text-slate-800 truncate">${s.item}</p>
                     </div>
                 </div>
-            `).join('') : '<p class="text-amber-400 text-[10px] font-bold italic p-2">기증을 기다립니다!</p>';
+            `).join('') : '<p class="text-amber-400 text-[10px] font-bold italic p-2 w-full text-center">후원 물품이 없습니다.</p>';
 
             document.getElementById('hall-list').innerHTML = state.sponsors.map(s => `
                 <div class="bg-white rounded-3xl p-6 border border-slate-200 flex items-center gap-4 shadow-sm">
@@ -243,69 +241,81 @@
             if (window.lucide) lucide.createIcons();
         };
 
-        // --- FIREBASE BOOTSTRAP ---
-        async function startFirebase() {
-            try {
-                // 환경 변수 파싱
-                const config = JSON.parse(__firebase_config);
-                const app = initializeApp(config);
-                const auth = getAuth(app);
-                state.db = getFirestore(app);
+        // --- FIREBASE SYNC (Retry Logic Added) ---
+        async function boot() {
+            let retries = 5;
+            let delay = 1000;
 
-                updateStatus("사용자 인증 중...");
+            const attemptInit = async () => {
+                try {
+                    if (typeof __firebase_config === 'undefined') {
+                        throw new Error("Config not ready");
+                    }
 
-                // 인증 시퀀스
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                    const config = JSON.parse(__firebase_config);
+                    const app = initializeApp(config);
+                    const auth = getAuth(app);
+                    state.db = getFirestore(app);
 
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        state.user = user;
-                        updateStatus("데이터 동기화 중...", "bg-blue-500");
-                        connectFirestore();
+                    updateStatus("사용자 인증 중...", "bg-blue-600");
+
+                    const initAuth = async () => {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            return await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            return await signInAnonymously(auth);
+                        }
+                    };
+
+                    await initAuth();
+
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            state.user = user;
+                            updateStatus("데이터 연동 중...", "bg-green-700");
+                            sync();
+                        }
+                    });
+
+                } catch (e) {
+                    if (retries > 0) {
+                        updateStatus(`재연결 시도 중... (${retries})`, "bg-amber-600");
+                        retries--;
+                        setTimeout(attemptInit, delay);
+                        delay *= 2;
                     } else {
-                        updateStatus("인증 실패 (로컬 모드)", "bg-rose-600");
+                        updateStatus("연결 실패 (로컬 모드)", "bg-rose-600");
                         render();
                     }
-                });
-            } catch (e) {
-                console.error("Firebase Boot Error:", e);
-                updateStatus("연결 오류 (로컬 모드)", "bg-rose-600");
-                render();
-            }
+                }
+            };
+
+            attemptInit();
         }
 
-        async function connectFirestore() {
+        async function sync() {
             const { db, appId } = state;
-            const basePath = ['artifacts', appId, 'public', 'data'];
+            const publicPath = (col) => collection(db, 'artifacts', appId, 'public', 'data', col);
+            const configDoc = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main');
 
-            // 1. Players Sync
-            const playerCol = collection(db, ...basePath, 'players');
-            onSnapshot(playerCol, (snap) => {
+            // 1. Players
+            onSnapshot(publicPath('players'), (snap) => {
                 if (snap.empty) {
-                    // 첫 실행 시 초기 데이터 업로드
-                    DEFAULT_PLAYERS.forEach(p => setDoc(doc(playerCol, p.id), p));
+                    DEFAULT_PLAYERS.forEach(p => setDoc(doc(publicPath('players'), p.id), p));
                 } else {
                     state.players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     render();
-                    updateStatus("온라인: 실시간 연동 중", "bg-green-600");
+                    updateStatus("실시간 온라인 연결됨", "bg-green-600");
                 }
-            }, (err) => {
-                updateStatus("Firestore 권한 오류", "bg-rose-600");
-            });
+            }, (err) => console.error("Sync Error:", err));
 
-            // 2. Sponsors Sync
-            const sponCol = collection(db, ...basePath, 'sponsors');
-            onSnapshot(sponCol, (snap) => {
+            // 2. Sponsors
+            onSnapshot(publicPath('sponsors'), (snap) => {
                 state.sponsors = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.createdAt - a.createdAt);
                 render();
             });
 
-            // 3. Notice Sync
-            const configDoc = doc(db, ...basePath, 'config', 'main');
+            // 3. Notice
             onSnapshot(configDoc, (snap) => {
                 if (snap.exists()) {
                     state.notice = snap.data().notice;
@@ -316,49 +326,49 @@
             });
         }
 
-        // --- DATABASE ACTIONS ---
-        const getDocRef = (col, id) => doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id);
+        // --- ACTIONS ---
+        const getPublicDoc = (col, id) => doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id);
 
         window.setTeam = async (id, team) => {
             if (!state.isAdmin) return openModal({ msg: '관리자 로그인이 필요합니다.' });
+            if (!state.user) return;
             const p = state.players.find(x => x.id === id);
             const nextTeam = p.t === team ? 'none' : team;
-            try {
-                await updateDoc(getDocRef('players', id), { t: nextTeam });
-            } catch (e) { console.error(e); }
+            try { await updateDoc(getPublicDoc('players', id), { t: nextTeam }); } catch (e) {}
         };
 
         window.editHandicap = (id) => {
             const p = state.players.find(x => x.id === id);
             openModal({ title: '수정', msg: `${p.name} 핸디캡 수정:`, input: true, onOk: async (v) => {
                 const h = parseFloat(v);
-                if (!isNaN(h)) await updateDoc(getDocRef('players', id), { h });
+                if (!isNaN(h)) await updateDoc(getPublicDoc('players', id), { h });
             }});
         };
 
         window.editNotice = () => {
             if (!state.isAdmin) return;
             openModal({ title: '공지 수정', msg: '공지 내용 입력:', input: true, onOk: async (v) => {
-                if (v) await updateDoc(getDocRef('config', 'main'), { notice: v });
+                if (v) await updateDoc(getPublicDoc('config', 'main'), { notice: v });
             }});
         };
 
         window.addSponsor = async () => {
+            if (!state.user) return;
             const user = document.getElementById('spon-name').value;
             const item = document.getElementById('spon-item').value;
             if (user && item) {
                 const s = { id: `s-${Date.now()}`, user, item, createdAt: Date.now() };
-                await setDoc(getDocRef('sponsors', s.id), s);
+                await setDoc(getPublicDoc('sponsors', s.id), s);
                 document.getElementById('spon-name').value = '';
                 document.getElementById('spon-item').value = '';
             }
         };
 
         window.deleteSponsor = async (id) => {
-            await deleteDoc(getDocRef('sponsors', id));
+            if (state.isAdmin) await deleteDoc(getPublicDoc('sponsors', id));
         };
 
-        // --- NAVIGATION & UI ---
+        // --- UI ---
         window.changeView = (v) => {
             document.querySelectorAll('.view-section').forEach(s => s.classList.toggle('active', s.id === `view-${v}`));
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === `nav-${v}`));
@@ -394,8 +404,8 @@
 
         window.closeModal = () => document.getElementById('modal').classList.add('hidden');
 
-        // Init App
-        startFirebase();
+        // Start
+        window.onload = boot;
         render();
 
     </script>
