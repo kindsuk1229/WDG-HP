@@ -131,6 +131,20 @@
     </div>
 
     <script type="module">
+        <script type="module">
+    // 여기에 본인의 Firebase 프로젝트 설정값을 직접 넣으세요
+    const __firebase_config = JSON.stringify({
+        apiKey: "AIzaSy...",
+        authDomain: "your-project-id.firebaseapp.com",
+        projectId: "your-project-id",
+        storageBucket: "your-project-id.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456789:web:abcdef..."
+    });
+
+    const __app_id = 'udonggol-v6-final'; // 앱 구분 ID
+
+        // ... 나머지 import 코드
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
