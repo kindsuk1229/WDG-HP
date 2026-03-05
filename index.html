@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>우동골 시즌 6 - 실시간 동기화 수정본</title>
+    <title>우동골 시즌 6 - DB 연결 최적화</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        body { font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; }
         .view-section { display: none; }
         .view-section.active { display: block; animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -19,9 +19,9 @@
 </head>
 <body class="bg-slate-50 text-slate-900 pb-24 md:pb-0">
 
-    <!-- Connection Status Banner -->
-    <div id="status-banner" class="fixed top-0 left-0 right-0 bg-amber-500 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all">
-        데이터베이스 연결 중...
+    <!-- Database Status Indicator -->
+    <div id="status-banner" class="fixed top-0 left-0 right-0 bg-slate-800 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all">
+        시스템 초기화 중...
     </div>
 
     <!-- Navigation -->
@@ -48,35 +48,25 @@
                 <p class="text-green-400 text-[10px] font-black uppercase mb-2 flex items-center gap-1 tracking-widest">
                     <i data-lucide="megaphone" class="w-3 h-3 text-green-400"></i> Notice
                 </p>
-                <p id="notice-text" class="text-xl font-bold italic leading-tight">"실력보다 매너, 스코어보다 우정"</p>
+                <p id="notice-text" class="text-xl font-bold italic leading-tight">불러오는 중...</p>
                 <div id="edit-indicator" class="hidden absolute top-4 right-6 text-[8px] font-bold bg-green-500 text-white px-2 py-1 rounded">ADMIN EDIT</div>
-                <i data-lucide="flag" class="absolute -bottom-6 -right-6 w-32 h-32 text-white/5 pointer-events-none"></i>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4">
                     <div class="bg-blue-50 text-blue-600 p-4 rounded-2xl"><i data-lucide="map-pin"></i></div>
-                    <div>
-                        <p class="text-[10px] font-black text-slate-400 uppercase">Location</p>
-                        <p class="text-lg font-black text-slate-800">샤인데일CC</p>
-                    </div>
+                    <div><p class="text-[10px] font-black text-slate-400 uppercase">Location</p><p class="text-lg font-black text-slate-800">샤인데일CC</p></div>
                 </div>
                 <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4">
                     <div class="bg-orange-50 text-orange-600 p-4 rounded-2xl"><i data-lucide="calendar"></i></div>
-                    <div>
-                        <p class="text-[10px] font-black text-slate-400 uppercase">Schedule</p>
-                        <p class="text-base font-bold text-slate-800 leading-tight">03.29 (일) 11:00 집결</p>
-                    </div>
+                    <div><p class="text-[10px] font-black text-slate-400 uppercase">Schedule</p><p class="text-base font-bold text-slate-800 leading-tight">03.29 (일) 11:00 집결</p></div>
                 </div>
             </div>
 
             <div class="bg-amber-50 rounded-[2rem] p-6 border border-amber-100">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="font-black italic uppercase text-amber-800 text-sm tracking-tight flex items-center gap-2">
-                        <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i> Sponsorship
-                    </h3>
-                    <button onclick="changeView('hall')" class="text-[10px] font-black text-amber-600 uppercase tracking-tighter">View All</button>
-                </div>
+                <h3 class="font-black italic uppercase text-amber-800 text-sm tracking-tight flex items-center gap-2 mb-4">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i> Sponsorship
+                </h3>
                 <div id="home-sponsor-list" class="flex gap-3 overflow-x-auto hide-scroll"></div>
             </div>
         </section>
@@ -140,8 +130,12 @@
         </div>
     </div>
 
-    <script>
-        // --- State & Initial Data ---
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // --- GLOBAL STATE ---
         const DEFAULT_PLAYERS = [
             { name: "낭빠", h: 9.9 }, { name: "세리", h: 15.3 }, { name: "김부장", h: 15.1 }, { name: "버디레몬", h: 19 },
             { name: "밤또", h: 23 }, { name: "버디펏", h: 14.5 }, { name: "양영빈", h: 21.4 }, { name: "모키", h: 14.6 },
@@ -156,50 +150,28 @@
             { name: "찰리심", h: 16 }, { name: "예비선수", h: 20 }
         ].map((p, i) => ({ id: `p-${i}`, ...p, t: 'none' }));
 
-        let state = {
+        window.state = {
             view: 'home',
             isAdmin: false,
             players: DEFAULT_PLAYERS,
             sponsors: [],
-            notice: "실력보다 매너, 스코어보다 우정"
+            notice: "실력보다 매너, 스코어보다 우정",
+            db: null,
+            user: null,
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'udonggol-v6-draft'
         };
 
-        // --- Core UI Functions ---
-        function changeView(v) {
-            state.view = v;
-            document.querySelectorAll('.view-section').forEach(s => s.classList.toggle('active', s.id === `view-${v}`));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === `nav-${v}`));
-            render();
-            window.scrollTo(0, 0);
-        }
-
-        function toggleAdmin() {
-            if (state.isAdmin) {
-                state.isAdmin = false;
-                render();
-            } else {
-                openModal({
-                    title: 'Admin Auth', msg: '관리자 비밀번호를 입력하세요.', input: true, isPass: true,
-                    onOk: (val) => {
-                        if (val === '0101') { state.isAdmin = true; render(); }
-                        else { alert('비밀번호가 틀렸습니다.'); }
-                    }
-                });
-            }
-        }
-
-        function render() {
-            // Update Admin Elements
+        // --- RENDER LOGIC ---
+        window.render = () => {
             document.getElementById('admin-lock').classList.toggle('text-green-600', state.isAdmin);
             document.getElementById('edit-indicator').classList.toggle('hidden', !state.isAdmin);
-
-            // Notice
             document.getElementById('notice-text').innerText = state.notice;
 
-            // Player List
-            document.getElementById('player-count-badge').innerText = `${state.players.length} Players`;
+            // Player View
             const list = document.getElementById('player-list');
-            list.innerHTML = [...state.players].sort((a,b) => a.h - b.h).map(p => `
+            const sortedPlayers = [...state.players].sort((a,b) => a.h - b.h);
+            document.getElementById('player-count-badge').innerText = `${state.players.length} Players`;
+            list.innerHTML = sortedPlayers.map(p => `
                 <div class="flex items-center justify-between p-6">
                     <div>
                         <span class="font-black text-slate-800 text-lg">${p.name}</span>
@@ -208,53 +180,55 @@
                             <span class="text-[9px] font-black text-slate-400 uppercase">${p.t === 'none' ? 'Waiting' : p.t + ' Team'}</span>
                         </div>
                     </div>
-                    <div class="flex items-center gap-4">
-                        <div class="text-right">
-                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Handicap</p>
-                            <p class="text-xl font-black text-green-600">${p.h}</p>
-                        </div>
-                        ${state.isAdmin ? `<button onclick="editHandicap('${p.id}')" class="bg-slate-100 text-slate-600 p-2 rounded-xl"><i data-lucide="edit-3" class="w-4 h-4"></i></button>` : ''}
+                    <div class="flex items-center gap-4 text-right">
+                        <div><p class="text-[9px] font-black text-slate-400 uppercase">Handicap</p><p class="text-xl font-black text-green-600">${p.h}</p></div>
+                        ${state.isAdmin ? `<button onclick="editHandicap('${p.id}')" class="bg-slate-100 p-2 rounded-xl text-slate-600"><i data-lucide="edit-3" class="w-4 h-4"></i></button>` : ''}
                     </div>
                 </div>
             `).join('');
 
-            // Draft
-            const jolam = state.players.filter(p => p.t === 'jolam');
-            const yumki = state.players.filter(p => p.t === 'yumki');
-            document.getElementById('count-jolam').innerText = jolam.length;
-            document.getElementById('count-yumki').innerText = yumki.length;
+            // Draft Board (Selected to Bottom)
+            const draftGrid = document.getElementById('draft-grid');
+            const jolamCount = state.players.filter(p => p.t === 'jolam').length;
+            const yumkiCount = state.players.filter(p => p.t === 'yumki').length;
+            document.getElementById('count-jolam').innerText = jolamCount;
+            document.getElementById('count-yumki').innerText = yumkiCount;
 
-            const grid = document.getElementById('draft-grid');
-            grid.innerHTML = [...state.players].sort((a,b) => a.h - b.h).map(p => `
-                <div class="bg-white rounded-[1.5rem] p-4 border-2 transition-all ${p.t === 'jolam' ? 'border-rose-500 shadow-rose-100' : p.t === 'yumki' ? 'border-blue-600 shadow-blue-100' : 'border-slate-100'}">
+            const sortedForDraft = [...state.players].sort((a, b) => {
+                const aDone = a.t !== 'none' ? 1 : 0;
+                const bDone = b.t !== 'none' ? 1 : 0;
+                if (aDone !== bDone) return aDone - bDone;
+                return a.h - b.h;
+            });
+
+            draftGrid.innerHTML = sortedForDraft.map(p => `
+                <div class="bg-white rounded-[1.5rem] p-4 border-2 transition-all ${p.t === 'jolam' ? 'border-rose-500 bg-rose-50 opacity-80' : p.t === 'yumki' ? 'border-blue-600 bg-blue-50 opacity-80' : 'border-slate-100 shadow-sm'}">
                     <div class="mb-3">
                         <p class="font-black text-slate-800 text-sm truncate">${p.name}</p>
                         <p class="text-[9px] font-black text-green-600 uppercase italic">H ${p.h}</p>
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="setTeam('${p.id}', 'jolam')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${p.t === 'jolam' ? 'bg-rose-500 text-white' : 'bg-slate-50 text-slate-400'}">J</button>
-                        <button onclick="setTeam('${p.id}', 'yumki')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${p.t === 'yumki' ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400'}">Y</button>
+                        <button onclick="setTeam('${p.id}', 'jolam')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${p.t === 'jolam' ? 'bg-rose-500 text-white' : 'bg-slate-50 text-slate-400 border border-slate-200'}">J</button>
+                        <button onclick="setTeam('${p.id}', 'yumki')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${p.t === 'yumki' ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 border border-slate-200'}">Y</button>
                     </div>
                 </div>
             `).join('');
 
             // Sponsors
-            const homeSpons = document.getElementById('home-sponsor-list');
-            homeSpons.innerHTML = state.sponsors.length ? state.sponsors.map(s => `
-                <div class="bg-white min-w-[150px] p-4 rounded-2xl border border-amber-100 shadow-sm flex items-center gap-3">
+            document.getElementById('home-sponsor-list').innerHTML = state.sponsors.length ? state.sponsors.map(s => `
+                <div class="bg-white min-w-[140px] p-4 rounded-2xl border border-amber-100 shadow-sm flex items-center gap-3">
                     <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center font-black text-amber-600 text-xs">${s.user[0]}</div>
                     <div class="truncate">
                         <p class="text-[8px] font-black text-amber-600 uppercase">${s.user}</p>
                         <p class="text-[11px] font-bold text-slate-800 truncate">${s.item}</p>
                     </div>
                 </div>
-            `).join('') : '<p class="text-amber-400 text-[10px] font-bold italic p-2">첫 번째 기증자를 기다립니다!</p>';
+            `).join('') : '<p class="text-amber-400 text-[10px] font-bold italic p-2">기증을 기다립니다!</p>';
 
-            const hallList = document.getElementById('hall-list');
-            hallList.innerHTML = state.sponsors.map(s => `
+            document.getElementById('hall-list').innerHTML = state.sponsors.map(s => `
                 <div class="bg-white rounded-3xl p-6 border border-slate-200 flex items-center gap-4 shadow-sm">
                     <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center font-black text-lg">${s.user[0]}</div>
-                    <div class="flex-1">
+                    <div class="flex-1 text-left">
                         <h4 class="text-[10px] font-black text-slate-400 uppercase">${s.user}님</h4>
                         <p class="text-base font-black text-slate-800">${s.item}</p>
                     </div>
@@ -263,10 +237,156 @@
             `).join('');
 
             if (window.lucide) lucide.createIcons();
+        };
+
+        // --- FIREBASE CORE (FIXED CONNECTION) ---
+        async function bootSystem() {
+            const banner = document.getElementById('status-banner');
+            try {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                state.db = getFirestore(app);
+
+                // RULE 3: Auth First & Await
+                banner.innerText = "데이터베이스 보안 인증 중...";
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        state.user = user;
+                        banner.innerText = "동기화 완료 (온라인 모드)";
+                        banner.classList.replace('bg-slate-800', 'bg-green-600');
+                        initSync();
+                        setTimeout(() => banner.style.transform = 'translateY(-100%)', 2000);
+                    }
+                });
+            } catch (e) {
+                console.error("Boot Failed", e);
+                banner.innerText = "연결 실패 (로컬 모드)";
+                banner.classList.replace('bg-slate-800', 'bg-rose-600');
+                render();
+            }
         }
 
-        // --- Modal ---
-        function openModal({ title, msg, input, isPass, onOk }) {
+        function initSync() {
+            const { db, appId } = state;
+            
+            // Sync Players
+            const playerCol = collection(db, 'artifacts', appId, 'public', 'data', 'players');
+            onSnapshot(playerCol, (snap) => {
+                if (snap.empty) {
+                    // Seed initial data if empty
+                    DEFAULT_PLAYERS.forEach(p => setDoc(doc(playerCol, p.id), p));
+                } else {
+                    state.players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    render();
+                }
+            }, (err) => console.error("Player Sync Err", err));
+
+            // Sync Sponsors
+            const sponCol = collection(db, 'artifacts', appId, 'public', 'data', 'sponsors');
+            onSnapshot(sponCol, (snap) => {
+                state.sponsors = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.createdAt - a.createdAt);
+                render();
+            }, (err) => console.error("Spon Sync Err", err));
+
+            // Sync Config
+            const configDoc = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main');
+            onSnapshot(configDoc, (snap) => {
+                if (snap.exists()) {
+                    state.notice = snap.data().notice;
+                    render();
+                } else {
+                    setDoc(configDoc, { notice: state.notice });
+                }
+            }, (err) => console.error("Config Sync Err", err));
+        }
+
+        // --- DATABASE OPERATIONS ---
+        async function dbUpdate(col, id, data) {
+            if (!state.user || !state.db) return;
+            try {
+                await updateDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id), data);
+            } catch (e) { console.error("Update Err", e); }
+        }
+
+        async function dbSet(col, id, data) {
+            if (!state.user || !state.db) return;
+            try {
+                await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id), data);
+            } catch (e) { console.error("Set Err", e); }
+        }
+
+        async function dbDelete(col, id) {
+            if (!state.user || !state.db) return;
+            try {
+                await deleteDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id));
+            } catch (e) { console.error("Delete Err", e); }
+        }
+
+        // --- APP ACTIONS ---
+        window.changeView = (v) => {
+            state.view = v;
+            document.querySelectorAll('.view-section').forEach(s => s.classList.toggle('active', s.id === `view-${v}`));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === `nav-${v}`));
+            render();
+            window.scrollTo(0, 0);
+        };
+
+        window.toggleAdmin = () => {
+            if (state.isAdmin) { state.isAdmin = false; render(); }
+            else {
+                openModal({ title: 'Admin', msg: 'Password?', input: true, isPass: true, onOk: (v) => {
+                    if (v === '0101') { state.isAdmin = true; render(); }
+                    else { alert('Wrong!'); }
+                }});
+            }
+        };
+
+        window.setTeam = async (id, team) => {
+            if (!state.isAdmin) return openModal({ msg: '관리자 권한이 필요합니다.' });
+            const p = state.players.find(x => x.id === id);
+            const newTeam = p.t === team ? 'none' : team;
+            await dbUpdate('players', id, { t: newTeam });
+        };
+
+        window.editHandicap = (id) => {
+            const p = state.players.find(x => x.id === id);
+            openModal({ title: 'Edit', msg: `${p.name} Handicap?`, input: true, onOk: async (v) => {
+                const h = parseFloat(v);
+                if (!isNaN(h)) await dbUpdate('players', id, { h });
+            }});
+        };
+
+        window.editNotice = () => {
+            if (!state.isAdmin) return;
+            openModal({ title: 'Edit Notice', msg: '공지 내용:', input: true, onOk: async (v) => {
+                if (v) await dbUpdate('config', 'main', { notice: v });
+            }});
+        };
+
+        window.addSponsor = async () => {
+            const user = document.getElementById('spon-name').value;
+            const item = document.getElementById('spon-item').value;
+            if (user && item) {
+                const s = { id: `s-${Date.now()}`, user, item, createdAt: Date.now() };
+                await dbSet('sponsors', s.id, s);
+                document.getElementById('spon-name').value = '';
+                document.getElementById('spon-item').value = '';
+            }
+        };
+
+        window.deleteSponsor = async (id) => {
+            await dbDelete('sponsors', id);
+        };
+
+        // --- UI UTILS ---
+        window.openModal = ({ title, msg, input, isPass, onOk }) => {
             const m = document.getElementById('modal');
             document.getElementById('modal-title').innerText = title || 'Notice';
             document.getElementById('modal-msg').innerText = msg;
@@ -281,181 +401,14 @@
                 if (onOk) onOk(v);
             };
             m.classList.remove('hidden');
-            setTimeout(() => m.children[0].classList.remove('scale-90'), 10);
-        }
-
-        function closeModal() {
-            document.getElementById('modal').classList.add('hidden');
-            document.getElementById('modal').children[0].classList.add('scale-90');
-        }
-
-        // --- Data Actions ---
-        function editNotice() {
-            if (!state.isAdmin) return;
-            openModal({
-                title: 'Notice Edit', msg: '공지 사항을 입력하세요.', input: true,
-                onOk: (v) => { if(v) { state.notice = v; updateRemote('config', 'main', { notice: v }); render(); } }
-            });
-        }
-
-        function editHandicap(id) {
-            const p = state.players.find(x => x.id === id);
-            openModal({
-                title: 'Handicap Edit', msg: `${p.name}님의 새로운 핸디캡을 입력하세요.`, input: true,
-                onOk: (v) => {
-                    const h = parseFloat(v);
-                    if (!isNaN(h)) {
-                        p.h = h;
-                        updateRemote('players', id, { h });
-                        render();
-                    }
-                }
-            });
-        }
-
-        function setTeam(id, team) {
-            if (!state.isAdmin) return openModal({ msg: '관리자 로그인이 필요합니다.' });
-            const p = state.players.find(x => x.id === id);
-            p.t = p.t === team ? 'none' : team;
-            updateRemote('players', id, { t: p.t });
-            render();
-        }
-
-        function addSponsor() {
-            const user = document.getElementById('spon-name').value;
-            const item = document.getElementById('spon-item').value;
-            if (user && item) {
-                const s = { id: `s-${Date.now()}`, user, item, createdAt: Date.now() };
-                state.sponsors.unshift(s);
-                addRemote('sponsors', s);
-                document.getElementById('spon-name').value = '';
-                document.getElementById('spon-item').value = '';
-                render();
-            }
-        }
-
-        function deleteSponsor(id) {
-            state.sponsors = state.sponsors.filter(s => s.id !== id);
-            deleteRemote('sponsors', id);
-            render();
-        }
-
-        // --- Firebase Integration (Permissions Fix) ---
-        let db;
-        let isConnected = false;
-        let appId = 'udg-final-v6'; // Unique App ID for Season 6
-
-        async function initFirebase() {
-            try {
-                const { initializeApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
-                const { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                const { getAuth, signInAnonymously, signInWithCustomToken } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
-
-                const config = JSON.parse(__firebase_config);
-                const app = initializeApp(config);
-                db = getFirestore(app);
-                const auth = getAuth(app);
-                
-                // 1. Mandatory Auth Step
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                // 2. Start Listeners ONLY after Auth is complete
-                startListeners();
-
-            } catch (e) {
-                console.error("Firebase Init Error:", e);
-                updateBanner("데이터베이스 연결 실패 (로컬 모드)", "bg-rose-500");
-            }
-        }
-
-        async function startListeners() {
-            const { doc, collection, onSnapshot, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-            const currentAppId = typeof __app_id !== 'undefined' ? __app_id : appId;
-            
-            isConnected = true;
-            updateBanner("실시간 모드 활성화됨", "bg-green-600");
-            setTimeout(() => document.getElementById('status-banner').style.transform = 'translateY(-100%)', 3000);
-
-            // Players Listener
-            onSnapshot(collection(db, 'artifacts', currentAppId, 'public', 'data', 'players'), 
-                (s) => {
-                    if (!s.empty) {
-                        state.players = s.docs.map(d => ({id: d.id, ...d.data()}));
-                        render();
-                    } else {
-                        // Init remote with local defaults
-                        state.players.forEach(p => setDoc(doc(db, 'artifacts', currentAppId, 'public', 'data', 'players', p.id), p));
-                    }
-                }, 
-                (err) => console.warn("Players Sync Error:", err)
-            );
-
-            // Sponsors Listener
-            onSnapshot(collection(db, 'artifacts', currentAppId, 'public', 'data', 'sponsors'), 
-                (s) => {
-                    state.sponsors = s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => b.createdAt - a.createdAt);
-                    render();
-                },
-                (err) => console.warn("Sponsors Sync Error:", err)
-            );
-
-            // Config Listener
-            onSnapshot(doc(db, 'artifacts', currentAppId, 'public', 'data', 'config', 'main'), 
-                (d) => {
-                    if (d.exists()) { 
-                        state.notice = d.data().notice; 
-                        render(); 
-                    } else {
-                        setDoc(doc(db, 'artifacts', currentAppId, 'public', 'data', 'config', 'main'), { notice: state.notice });
-                    }
-                },
-                (err) => console.warn("Config Sync Error:", err)
-            );
-        }
-
-        function updateBanner(text, bgColor) {
-            const banner = document.getElementById('status-banner');
-            banner.innerText = text;
-            banner.className = `fixed top-0 left-0 right-0 ${bgColor} text-white text-[10px] font-bold text-center py-1 z-[100] transition-all`;
-        }
-
-        // --- Helper functions for remote sync ---
-        async function updateRemote(col, id, data) {
-            if (!isConnected) return;
-            const currentAppId = typeof __app_id !== 'undefined' ? __app_id : appId;
-            try {
-                const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                await updateDoc(doc(db, 'artifacts', currentAppId, 'public', 'data', col, id), data);
-            } catch(e) { console.error("Remote Update Fail", e); }
-        }
-
-        async function addRemote(col, data) {
-            if (!isConnected) return;
-            const currentAppId = typeof __app_id !== 'undefined' ? __app_id : appId;
-            try {
-                const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                await setDoc(doc(db, 'artifacts', currentAppId, 'public', 'data', col, data.id), data);
-            } catch(e) { console.error("Remote Add Fail", e); }
-        }
-
-        async function deleteRemote(col, id) {
-            if (!isConnected) return;
-            const currentAppId = typeof __app_id !== 'undefined' ? __app_id : appId;
-            try {
-                const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                await deleteDoc(doc(db, 'artifacts', currentAppId, 'public', 'data', col, id));
-            } catch(e) { console.error("Remote Delete Fail", e); }
-        }
-
-        // Initialization
-        window.onload = () => {
-            render();
-            initFirebase();
         };
+
+        window.closeModal = () => document.getElementById('modal').classList.add('hidden');
+
+        // Start
+        bootSystem();
+        render();
+
     </script>
 </body>
 </html>
