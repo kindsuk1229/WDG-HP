@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>우동골 시즌 6 - WDGHP</title>
+    <title>우동골 시즌 6 - WDG</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -379,7 +379,7 @@
         window.toggleAdmin = () => {
             if (state.isAdmin) { state.isAdmin = false; render(); }
             else {
-                openModal({ title: '관리자', msg: '비번 입력 (0101):', input: true, isPass: true, onOk: (v) => {
+                openModal({ title: '관리자', msg: '비번 입력', input: true, isPass: true, onOk: (v) => {
                     if (v === '0101') { state.isAdmin = true; render(); }
                     else { openModal({ msg: '틀렸습니다.' }); }
                 }});
