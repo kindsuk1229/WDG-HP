@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>우동골 시즌 6 - DB 연결 최적화</title>
+    <title>우동골 시즌 6 - DB 완전 복구</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -19,9 +19,9 @@
 </head>
 <body class="bg-slate-50 text-slate-900 pb-24 md:pb-0">
 
-    <!-- Database Status Indicator -->
-    <div id="status-banner" class="fixed top-0 left-0 right-0 bg-slate-800 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all">
-        시스템 초기화 중...
+    <!-- DB 상태 표시기 (디버깅용) -->
+    <div id="status-banner" class="fixed top-0 left-0 right-0 bg-amber-500 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all">
+        데이터베이스 연결 시도 중...
     </div>
 
     <!-- Navigation -->
@@ -132,10 +132,10 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // --- GLOBAL STATE ---
+        // --- 초기 플레이어 데이터 ---
         const DEFAULT_PLAYERS = [
             { name: "낭빠", h: 9.9 }, { name: "세리", h: 15.3 }, { name: "김부장", h: 15.1 }, { name: "버디레몬", h: 19 },
             { name: "밤또", h: 23 }, { name: "버디펏", h: 14.5 }, { name: "양영빈", h: 21.4 }, { name: "모키", h: 14.6 },
@@ -151,23 +151,28 @@
         ].map((p, i) => ({ id: `p-${i}`, ...p, t: 'none' }));
 
         window.state = {
-            view: 'home',
             isAdmin: false,
             players: DEFAULT_PLAYERS,
             sponsors: [],
             notice: "실력보다 매너, 스코어보다 우정",
             db: null,
             user: null,
-            appId: typeof __app_id !== 'undefined' ? __app_id : 'udonggol-v6-draft'
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'udonggol-v6-2222'
         };
 
-        // --- RENDER LOGIC ---
+        const updateStatus = (msg, colorClass = 'bg-amber-500') => {
+            const banner = document.getElementById('status-banner');
+            banner.innerText = msg;
+            banner.className = `fixed top-0 left-0 right-0 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all ${colorClass}`;
+        };
+
+        // --- RENDER ---
         window.render = () => {
             document.getElementById('admin-lock').classList.toggle('text-green-600', state.isAdmin);
             document.getElementById('edit-indicator').classList.toggle('hidden', !state.isAdmin);
             document.getElementById('notice-text').innerText = state.notice;
 
-            // Player View
+            // Player List
             const list = document.getElementById('player-list');
             const sortedPlayers = [...state.players].sort((a,b) => a.h - b.h);
             document.getElementById('player-count-badge').innerText = `${state.players.length} Players`;
@@ -180,8 +185,8 @@
                             <span class="text-[9px] font-black text-slate-400 uppercase">${p.t === 'none' ? 'Waiting' : p.t + ' Team'}</span>
                         </div>
                     </div>
-                    <div class="flex items-center gap-4 text-right">
-                        <div><p class="text-[9px] font-black text-slate-400 uppercase">Handicap</p><p class="text-xl font-black text-green-600">${p.h}</p></div>
+                    <div class="flex items-center gap-4">
+                        <div><p class="text-[9px] font-black text-slate-400 uppercase">Hcp</p><p class="text-xl font-black text-green-600">${p.h}</p></div>
                         ${state.isAdmin ? `<button onclick="editHandicap('${p.id}')" class="bg-slate-100 p-2 rounded-xl text-slate-600"><i data-lucide="edit-3" class="w-4 h-4"></i></button>` : ''}
                     </div>
                 </div>
@@ -189,10 +194,8 @@
 
             // Draft Board (Selected to Bottom)
             const draftGrid = document.getElementById('draft-grid');
-            const jolamCount = state.players.filter(p => p.t === 'jolam').length;
-            const yumkiCount = state.players.filter(p => p.t === 'yumki').length;
-            document.getElementById('count-jolam').innerText = jolamCount;
-            document.getElementById('count-yumki').innerText = yumkiCount;
+            document.getElementById('count-jolam').innerText = state.players.filter(p => p.t === 'jolam').length;
+            document.getElementById('count-yumki').innerText = state.players.filter(p => p.t === 'yumki').length;
 
             const sortedForDraft = [...state.players].sort((a, b) => {
                 const aDone = a.t !== 'none' ? 1 : 0;
@@ -202,7 +205,7 @@
             });
 
             draftGrid.innerHTML = sortedForDraft.map(p => `
-                <div class="bg-white rounded-[1.5rem] p-4 border-2 transition-all ${p.t === 'jolam' ? 'border-rose-500 bg-rose-50 opacity-80' : p.t === 'yumki' ? 'border-blue-600 bg-blue-50 opacity-80' : 'border-slate-100 shadow-sm'}">
+                <div class="bg-white rounded-[1.5rem] p-4 border-2 transition-all ${p.t === 'jolam' ? 'border-rose-500 bg-rose-50' : p.t === 'yumki' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 shadow-sm'}">
                     <div class="mb-3">
                         <p class="font-black text-slate-800 text-sm truncate">${p.name}</p>
                         <p class="text-[9px] font-black text-green-600 uppercase italic">H ${p.h}</p>
@@ -214,8 +217,9 @@
                 </div>
             `).join('');
 
-            // Sponsors
-            document.getElementById('home-sponsor-list').innerHTML = state.sponsors.length ? state.sponsors.map(s => `
+            // Hall of Fame
+            const homeSpon = document.getElementById('home-sponsor-list');
+            homeSpon.innerHTML = state.sponsors.length ? state.sponsors.map(s => `
                 <div class="bg-white min-w-[140px] p-4 rounded-2xl border border-amber-100 shadow-sm flex items-center gap-3">
                     <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center font-black text-amber-600 text-xs">${s.user[0]}</div>
                     <div class="truncate">
@@ -239,17 +243,18 @@
             if (window.lucide) lucide.createIcons();
         };
 
-        // --- FIREBASE CORE (FIXED CONNECTION) ---
-        async function bootSystem() {
-            const banner = document.getElementById('status-banner');
+        // --- FIREBASE BOOTSTRAP ---
+        async function startFirebase() {
             try {
-                const firebaseConfig = JSON.parse(__firebase_config);
-                const app = initializeApp(firebaseConfig);
+                // 환경 변수 파싱
+                const config = JSON.parse(__firebase_config);
+                const app = initializeApp(config);
                 const auth = getAuth(app);
                 state.db = getFirestore(app);
 
-                // RULE 3: Auth First & Await
-                banner.innerText = "데이터베이스 보안 인증 중...";
+                updateStatus("사용자 인증 중...");
+
+                // 인증 시퀀스
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -259,44 +264,48 @@
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         state.user = user;
-                        banner.innerText = "동기화 완료 (온라인 모드)";
-                        banner.classList.replace('bg-slate-800', 'bg-green-600');
-                        initSync();
-                        setTimeout(() => banner.style.transform = 'translateY(-100%)', 2000);
+                        updateStatus("데이터 동기화 중...", "bg-blue-500");
+                        connectFirestore();
+                    } else {
+                        updateStatus("인증 실패 (로컬 모드)", "bg-rose-600");
+                        render();
                     }
                 });
             } catch (e) {
-                console.error("Boot Failed", e);
-                banner.innerText = "연결 실패 (로컬 모드)";
-                banner.classList.replace('bg-slate-800', 'bg-rose-600');
+                console.error("Firebase Boot Error:", e);
+                updateStatus("연결 오류 (로컬 모드)", "bg-rose-600");
                 render();
             }
         }
 
-        function initSync() {
+        async function connectFirestore() {
             const { db, appId } = state;
-            
-            // Sync Players
-            const playerCol = collection(db, 'artifacts', appId, 'public', 'data', 'players');
+            const basePath = ['artifacts', appId, 'public', 'data'];
+
+            // 1. Players Sync
+            const playerCol = collection(db, ...basePath, 'players');
             onSnapshot(playerCol, (snap) => {
                 if (snap.empty) {
-                    // Seed initial data if empty
+                    // 첫 실행 시 초기 데이터 업로드
                     DEFAULT_PLAYERS.forEach(p => setDoc(doc(playerCol, p.id), p));
                 } else {
                     state.players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     render();
+                    updateStatus("온라인: 실시간 연동 중", "bg-green-600");
                 }
-            }, (err) => console.error("Player Sync Err", err));
+            }, (err) => {
+                updateStatus("Firestore 권한 오류", "bg-rose-600");
+            });
 
-            // Sync Sponsors
-            const sponCol = collection(db, 'artifacts', appId, 'public', 'data', 'sponsors');
+            // 2. Sponsors Sync
+            const sponCol = collection(db, ...basePath, 'sponsors');
             onSnapshot(sponCol, (snap) => {
                 state.sponsors = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.createdAt - a.createdAt);
                 render();
-            }, (err) => console.error("Spon Sync Err", err));
+            });
 
-            // Sync Config
-            const configDoc = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main');
+            // 3. Notice Sync
+            const configDoc = doc(db, ...basePath, 'config', 'main');
             onSnapshot(configDoc, (snap) => {
                 if (snap.exists()) {
                     state.notice = snap.data().notice;
@@ -304,69 +313,33 @@
                 } else {
                     setDoc(configDoc, { notice: state.notice });
                 }
-            }, (err) => console.error("Config Sync Err", err));
+            });
         }
 
-        // --- DATABASE OPERATIONS ---
-        async function dbUpdate(col, id, data) {
-            if (!state.user || !state.db) return;
-            try {
-                await updateDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id), data);
-            } catch (e) { console.error("Update Err", e); }
-        }
-
-        async function dbSet(col, id, data) {
-            if (!state.user || !state.db) return;
-            try {
-                await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id), data);
-            } catch (e) { console.error("Set Err", e); }
-        }
-
-        async function dbDelete(col, id) {
-            if (!state.user || !state.db) return;
-            try {
-                await deleteDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id));
-            } catch (e) { console.error("Delete Err", e); }
-        }
-
-        // --- APP ACTIONS ---
-        window.changeView = (v) => {
-            state.view = v;
-            document.querySelectorAll('.view-section').forEach(s => s.classList.toggle('active', s.id === `view-${v}`));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === `nav-${v}`));
-            render();
-            window.scrollTo(0, 0);
-        };
-
-        window.toggleAdmin = () => {
-            if (state.isAdmin) { state.isAdmin = false; render(); }
-            else {
-                openModal({ title: 'Admin', msg: 'Password?', input: true, isPass: true, onOk: (v) => {
-                    if (v === '0101') { state.isAdmin = true; render(); }
-                    else { alert('Wrong!'); }
-                }});
-            }
-        };
+        // --- DATABASE ACTIONS ---
+        const getDocRef = (col, id) => doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id);
 
         window.setTeam = async (id, team) => {
-            if (!state.isAdmin) return openModal({ msg: '관리자 권한이 필요합니다.' });
+            if (!state.isAdmin) return openModal({ msg: '관리자 로그인이 필요합니다.' });
             const p = state.players.find(x => x.id === id);
-            const newTeam = p.t === team ? 'none' : team;
-            await dbUpdate('players', id, { t: newTeam });
+            const nextTeam = p.t === team ? 'none' : team;
+            try {
+                await updateDoc(getDocRef('players', id), { t: nextTeam });
+            } catch (e) { console.error(e); }
         };
 
         window.editHandicap = (id) => {
             const p = state.players.find(x => x.id === id);
-            openModal({ title: 'Edit', msg: `${p.name} Handicap?`, input: true, onOk: async (v) => {
+            openModal({ title: '수정', msg: `${p.name} 핸디캡 수정:`, input: true, onOk: async (v) => {
                 const h = parseFloat(v);
-                if (!isNaN(h)) await dbUpdate('players', id, { h });
+                if (!isNaN(h)) await updateDoc(getDocRef('players', id), { h });
             }});
         };
 
         window.editNotice = () => {
             if (!state.isAdmin) return;
-            openModal({ title: 'Edit Notice', msg: '공지 내용:', input: true, onOk: async (v) => {
-                if (v) await dbUpdate('config', 'main', { notice: v });
+            openModal({ title: '공지 수정', msg: '공지 내용 입력:', input: true, onOk: async (v) => {
+                if (v) await updateDoc(getDocRef('config', 'main'), { notice: v });
             }});
         };
 
@@ -375,20 +348,36 @@
             const item = document.getElementById('spon-item').value;
             if (user && item) {
                 const s = { id: `s-${Date.now()}`, user, item, createdAt: Date.now() };
-                await dbSet('sponsors', s.id, s);
+                await setDoc(getDocRef('sponsors', s.id), s);
                 document.getElementById('spon-name').value = '';
                 document.getElementById('spon-item').value = '';
             }
         };
 
         window.deleteSponsor = async (id) => {
-            await dbDelete('sponsors', id);
+            await deleteDoc(getDocRef('sponsors', id));
         };
 
-        // --- UI UTILS ---
+        // --- NAVIGATION & UI ---
+        window.changeView = (v) => {
+            document.querySelectorAll('.view-section').forEach(s => s.classList.toggle('active', s.id === `view-${v}`));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === `nav-${v}`));
+            window.scrollTo(0, 0);
+        };
+
+        window.toggleAdmin = () => {
+            if (state.isAdmin) { state.isAdmin = false; render(); }
+            else {
+                openModal({ title: '관리자', msg: '비밀번호를 입력하세요:', input: true, isPass: true, onOk: (v) => {
+                    if (v === '0101') { state.isAdmin = true; render(); }
+                    else { openModal({ msg: '비밀번호가 틀렸습니다.' }); }
+                }});
+            }
+        };
+
         window.openModal = ({ title, msg, input, isPass, onOk }) => {
             const m = document.getElementById('modal');
-            document.getElementById('modal-title').innerText = title || 'Notice';
+            document.getElementById('modal-title').innerText = title || '알림';
             document.getElementById('modal-msg').innerText = msg;
             const iw = document.getElementById('modal-input-wrap');
             const inp = document.getElementById('modal-input');
@@ -405,8 +394,8 @@
 
         window.closeModal = () => document.getElementById('modal').classList.add('hidden');
 
-        // Start
-        bootSystem();
+        // Init App
+        startFirebase();
         render();
 
     </script>
