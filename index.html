@@ -15,13 +15,14 @@
         .nav-btn.active { color: #16a34a !important; background-color: #f0fdf4 !important; border-radius: 1rem; }
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .chat-bubble { max-width: 90%; word-break: break-word; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 pb-24 md:pb-0">
 
-    <!-- DB 상태 표시기 -->
+    <!-- DB Status Banner -->
     <div id="status-banner" class="fixed top-0 left-0 right-0 bg-slate-800 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all">
-        데이터베이스 연결 시도 중...
+        Connecting to Database...
     </div>
 
     <!-- Navigation -->
@@ -33,14 +34,14 @@
         <button onclick="toggleAdmin()" class="p-3 text-slate-400 transition-colors" id="admin-lock"><i data-lucide="lock"></i></button>
     </nav>
 
-    <main class="p-4 md:pt-24 max-w-4xl mx-auto min-h-screen">
+    <main class="p-4 md:pt-24 max-w-6xl mx-auto min-h-screen">
         
         <!-- Section: Home -->
         <section id="view-home" class="view-section active">
             <header class="mb-6 pt-6 text-center md:text-left">
-                <div class="inline-block bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold mb-2 uppercase tracking-widest border border-green-200">WDG Season 6</div>
+                <div class="inline-block bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold mb-2 uppercase tracking-widest border border-green-200">WDGHP Season 6</div>
                 <h1 class="text-4xl font-black italic tracking-tighter leading-none text-slate-900 uppercase">
-                    WDG<br/><span class="text-green-600 text-5xl">GOLF CLUB</span>
+                    WDGHP<br/><span class="text-green-600 text-5xl">22vs22 BestScore Matchplay</span>
                 </h1>
             </header>
             
@@ -48,7 +49,7 @@
                 <p class="text-green-400 text-[10px] font-black uppercase mb-2 flex items-center gap-1 tracking-widest">
                     <i data-lucide="megaphone" class="w-3 h-3 text-green-400"></i> Notice
                 </p>
-                <p id="notice-text" class="text-xl font-bold italic leading-tight">데이터 로딩 중...</p>
+                <p id="notice-text" class="text-xl font-bold italic leading-tight">Loading...</p>
                 <div id="edit-indicator" class="hidden absolute top-4 right-6 text-[8px] font-bold bg-green-500 text-white px-2 py-1 rounded">ADMIN MODE</div>
             </div>
 
@@ -63,7 +64,7 @@
                 </div>
             </div>
 
-            <div class="bg-amber-50 rounded-[2rem] p-6 border border-amber-100">
+            <div class="bg-amber-50 rounded-[2rem] p-6 border border-amber-100 mb-6">
                 <h3 class="font-black italic uppercase text-amber-800 text-sm tracking-tight flex items-center gap-2 mb-4">
                     <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i> Sponsorship
                 </h3>
@@ -82,33 +83,79 @@
             </div>
         </section>
 
-        <!-- Section: Draft Board -->
+        <!-- Section: Draft Board (Side-by-Side) -->
         <section id="view-draft" class="view-section">
-            <div class="pt-6 mb-6">
+            <div class="pt-6 mb-6 px-2">
                 <h2 class="text-2xl font-black italic uppercase tracking-tighter text-blue-600 mb-4">Team Draft Board</h2>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-rose-500 rounded-3xl p-5 text-white shadow-xl">
-                        <p class="text-[10px] font-black uppercase opacity-60 mb-1">Jolam Team</p>
-                        <h4 class="text-2xl font-black" id="count-jolam">0</h4>
+                
+                <!-- Team Summary (Top Bar) -->
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-black text-rose-600 uppercase text-[10px]">Jolam Team</h4>
+                            <span id="count-jolam" class="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded-full font-bold">0</span>
+                        </div>
+                        <div id="list-jolam" class="flex flex-wrap gap-1 min-h-[20px]"></div>
                     </div>
-                    <div class="bg-blue-600 rounded-3xl p-5 text-white shadow-xl">
-                        <p class="text-[10px] font-black uppercase opacity-60 mb-1">Yumki Team</p>
-                        <h4 class="text-2xl font-black" id="count-yumki">0</h4>
+                    <div class="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-black text-blue-600 uppercase text-[10px]">Yumki Team</h4>
+                            <span id="count-yumki" class="bg-blue-600 text-white text-[9px] px-2 py-0.5 rounded-full font-bold">0</span>
+                        </div>
+                        <div id="list-yumki" class="flex flex-wrap gap-1 min-h-[20px]"></div>
                     </div>
                 </div>
             </div>
-            <div id="draft-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 pb-24"></div>
+
+            <!-- Main Layout: Grid for PC -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pb-20">
+                
+                <!-- Left: Player Selection (2-columns) -->
+                <div class="lg:col-span-7">
+                    <h3 class="text-[10px] font-black uppercase text-slate-400 mb-3 px-2 flex items-center gap-1">
+                        <i data-lucide="list" class="w-3 h-3"></i> Draft Roster
+                    </h3>
+                    <div id="draft-grid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        <!-- Players render here in 2 columns (mobile) to 3 (tablet/pc) -->
+                    </div>
+                </div>
+
+                <!-- Right: Chat Box (Fixed height/Sticky) -->
+                <div class="lg:col-span-5 lg:sticky lg:top-24">
+                    <h3 class="text-[10px] font-black uppercase text-slate-400 mb-3 px-2 flex items-center gap-1">
+                        <i data-lucide="message-square" class="w-3 h-3"></i> Strategy Chat
+                    </h3>
+                    <div class="bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden flex flex-col h-[500px] shadow-sm">
+                        <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+                            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Real-time Feed</span>
+                            <span id="user-id-display" class="text-[9px] font-bold text-slate-400 bg-slate-200/50 px-2 py-0.5 rounded-md">Guest</span>
+                        </div>
+                        <div id="chat-messages" class="flex-1 overflow-y-auto p-5 space-y-4 flex flex-col hide-scroll bg-slate-50/20">
+                            <!-- Messages appear here -->
+                        </div>
+                        <div class="p-3 bg-white border-t border-slate-200">
+                            <div class="flex gap-2">
+                                <input id="chat-input" type="text" placeholder="메시지를 입력하세요..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-blue-500 outline-none">
+                                <button onclick="sendChatMessage()" class="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-colors">
+                                    <i data-lucide="send" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
         </section>
 
         <!-- Section: Hall of Fame -->
         <section id="view-hall" class="view-section">
-            <h2 class="text-2xl font-black italic uppercase tracking-tighter text-amber-600 mb-6 pt-6">Hall of Fame</h2>
-            <div class="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm space-y-5 mb-8">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">후원 물품 기증하기</p>
+            <h2 class="text-2xl font-black italic uppercase tracking-tighter text-amber-600 mb-6 pt-6 px-2">Hall of Fame</h2>
+            <div class="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm space-y-5 mb-8 text-center">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">후원 물품 기증하기</p>
                 <div class="space-y-3">
                     <input id="spon-name" type="text" class="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 ring-amber-500 outline-none" placeholder="기증자 성함">
                     <input id="spon-item" type="text" class="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 ring-amber-500 outline-none" placeholder="후원하실 물품">
-                    <button id="spon-btn" onclick="addSponsor()" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all active:scale-95">기증 등록하기</button>
+                    <button onclick="addSponsor()" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all active:scale-95">기증 등록하기</button>
                 </div>
             </div>
             <div id="hall-list" class="grid grid-cols-1 gap-4 pb-20"></div>
@@ -117,7 +164,7 @@
 
     <!-- Modal System -->
     <div id="modal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-6">
-        <div class="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl scale-90 transition-transform">
+        <div class="bg-white rounded-[2.5rem] p-8 w-full max-sm shadow-2xl scale-95 transition-transform">
             <h3 id="modal-title" class="font-black uppercase mb-2 italic text-sm text-slate-400">System</h3>
             <p id="modal-msg" class="text-slate-800 font-bold text-lg mb-8 leading-tight"></p>
             <div id="modal-input-wrap" class="hidden mb-8">
@@ -132,10 +179,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // 사용자 제공 Firebase 설정
         const firebaseConfig = {
             apiKey: "AIzaSyDPhCnwsGrZidLEDZ1LX0HIR7THYo6txHk",
             authDomain: "wdghp-388ab.firebaseapp.com",
@@ -164,7 +210,8 @@
             isAdmin: false,
             players: [],
             sponsors: [],
-            notice: "WDGHP 시즌 6에 오신 것을 환영합니다",
+            messages: [],
+            notice: "WDGHP 시즌 6 드래프트 진행 중",
             db: null,
             user: null,
             appId: 'WDGHP_OFFICIAL'
@@ -172,16 +219,19 @@
 
         const updateStatus = (msg, color = 'bg-slate-800') => {
             const b = document.getElementById('status-banner');
-            b.innerText = msg;
-            b.className = `fixed top-0 left-0 right-0 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all ${color}`;
+            if (b) {
+                b.innerText = msg;
+                b.className = `fixed top-0 left-0 right-0 text-white text-[10px] font-bold text-center py-1 z-[100] transition-all ${color}`;
+            }
         };
 
-        // --- RENDER ENGINE ---
+        // --- RENDER ---
         window.render = () => {
             document.getElementById('admin-lock').classList.toggle('text-green-600', state.isAdmin);
             document.getElementById('edit-indicator').classList.toggle('hidden', !state.isAdmin);
             document.getElementById('notice-text').innerText = state.notice;
 
+            // Player List Page
             const playerList = document.getElementById('player-list');
             const sortedPlayers = [...state.players].sort((a,b) => a.h - b.h);
             document.getElementById('player-count-badge').innerText = `${state.players.length} Players`;
@@ -192,7 +242,7 @@
                         <span class="font-black text-slate-800 text-lg">${p.name}</span>
                         <div class="flex items-center gap-1 mt-0.5">
                             <span class="w-1.5 h-1.5 rounded-full ${p.t === 'jolam' ? 'bg-rose-500' : p.t === 'yumki' ? 'bg-blue-600' : 'bg-slate-300'}"></span>
-                            <span class="text-[9px] font-black text-slate-400 uppercase">${p.t === 'none' ? '준비중' : p.t + ' 팀'}</span>
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${p.t === 'none' ? 'Waiting' : p.t + ' Team'}</span>
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
@@ -205,38 +255,66 @@
                 </div>
             `).join('');
 
-            const draftGrid = document.getElementById('draft-grid');
-            document.getElementById('count-jolam').innerText = state.players.filter(p => p.t === 'jolam').length;
-            document.getElementById('count-yumki').innerText = state.players.filter(p => p.t === 'yumki').length;
+            // Draft Summary (Jolam vs Yumki)
+            const jolamPlayers = state.players.filter(p => p.t === 'jolam');
+            const yumkiPlayers = state.players.filter(p => p.t === 'yumki');
 
+            document.getElementById('count-jolam').innerText = jolamPlayers.length;
+            document.getElementById('count-yumki').innerText = yumkiPlayers.length;
+
+            document.getElementById('list-jolam').innerHTML = jolamPlayers.map(p => `
+                <span class="bg-white text-rose-600 px-1.5 py-0.5 rounded text-[8px] font-black border border-rose-100">${p.name}</span>
+            `).join('') || '<span class="text-[8px] text-rose-300 italic">No selection</span>';
+
+            document.getElementById('list-yumki').innerHTML = yumkiPlayers.map(p => `
+                <span class="bg-white text-blue-600 px-1.5 py-0.5 rounded text-[8px] font-black border border-blue-100">${p.name}</span>
+            `).join('') || '<span class="text-[8px] text-blue-300 italic">No selection</span>';
+
+            // Draft Grid (2-columns)
             const sortedForDraft = [...state.players].sort((a, b) => {
                 if (a.t !== b.t) return (a.t === 'none' ? -1 : 1) - (b.t === 'none' ? -1 : 1);
                 return a.h - b.h;
             });
 
-            draftGrid.innerHTML = sortedForDraft.map(p => `
-                <div class="bg-white rounded-[1.5rem] p-4 border-2 transition-all ${p.t === 'jolam' ? 'border-rose-500 bg-rose-50' : p.t === 'yumki' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 shadow-sm'}">
-                    <div class="mb-3">
-                        <p class="font-black text-slate-800 text-sm truncate">${p.name}</p>
-                        <p class="text-[9px] font-black text-green-600 uppercase italic">H ${p.h}</p>
+            document.getElementById('draft-grid').innerHTML = sortedForDraft.map(p => `
+                <div class="bg-white rounded-xl p-3 border transition-all ${p.t === 'jolam' ? 'border-rose-500 bg-rose-50' : p.t === 'yumki' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 shadow-sm'}">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-black text-slate-800 text-[11px] truncate w-2/3">${p.name}</span>
+                        <span class="text-[9px] font-black text-green-600">${p.h}</span>
                     </div>
-                    <div class="flex gap-1">
-                        <button onclick="setTeam('${p.id}', 'jolam')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${p.t === 'jolam' ? 'bg-rose-500 text-white' : 'bg-slate-50 text-slate-400 border border-slate-200'}">J</button>
-                        <button onclick="setTeam('${p.id}', 'yumki')" class="flex-1 py-1.5 rounded-lg text-[8px] font-black ${p.t === 'yumki' ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 border border-slate-200'}">Y</button>
+                    <div class="grid grid-cols-2 gap-1">
+                        <button onclick="setTeam('${p.id}', 'jolam')" class="py-1 rounded-md text-[8px] font-black transition-all ${p.t === 'jolam' ? 'bg-rose-600 text-white' : 'bg-slate-50 text-slate-400 border border-slate-100 active:bg-rose-100'}">JOLAM</button>
+                        <button onclick="setTeam('${p.id}', 'yumki')" class="py-1 rounded-md text-[8px] font-black transition-all ${p.t === 'yumki' ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 border border-slate-100 active:bg-blue-100'}">YUMKI</button>
                     </div>
                 </div>
             `).join('');
 
-            const homeSpon = document.getElementById('home-sponsor-list');
-            homeSpon.innerHTML = state.sponsors.length ? state.sponsors.map(s => `
+            // Chat Messages
+            const chatBox = document.getElementById('chat-messages');
+            chatBox.innerHTML = state.messages.map(m => {
+                const isMe = m.uid === state.user?.uid;
+                return `
+                    <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
+                        <span class="text-[8px] font-bold text-slate-400 mb-0.5 px-1">${isMe ? 'Me' : m.name}</span>
+                        <div class="chat-bubble px-3 py-2 rounded-xl text-[12px] font-medium leading-snug ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-700 shadow-sm border border-slate-100 rounded-tl-none'}">
+                            ${m.text}
+                        </div>
+                    </div>
+                `;
+            }).join('') || '<div class="h-full flex items-center justify-center text-[10px] text-slate-300 italic">채팅이 없습니다. 대화를 시작해보세요!</div>';
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Sponsors
+            const homeSponList = document.getElementById('home-sponsor-list');
+            homeSponList.innerHTML = state.sponsors.map(s => `
                 <div class="bg-white min-w-[140px] p-4 rounded-2xl border border-amber-100 shadow-sm flex items-center gap-3">
-                    <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center font-black text-amber-600 text-xs">${s.user[0]}</div>
+                    <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center font-black text-amber-600 text-[10px]">${s.user[0]}</div>
                     <div class="truncate">
                         <p class="text-[8px] font-black text-amber-600 uppercase">${s.user}</p>
                         <p class="text-[11px] font-bold text-slate-800 truncate">${s.item}</p>
                     </div>
                 </div>
-            `).join('') : '<p class="text-amber-400 text-[10px] font-bold italic p-2 w-full text-center">기증된 물품이 없습니다.</p>';
+            `).join('') || '<p class="text-[10px] text-amber-400 italic p-2">기증된 물품이 없습니다.</p>';
 
             document.getElementById('hall-list').innerHTML = state.sponsors.map(s => `
                 <div class="bg-white rounded-3xl p-6 border border-slate-200 flex items-center gap-4 shadow-sm">
@@ -252,40 +330,27 @@
             if (window.lucide) lucide.createIcons();
         };
 
-        // --- FIREBASE CORE ---
+        // --- FIREBASE LOGIC ---
         async function initDB() {
             try {
-                if (!firebaseConfig.apiKey) {
-                    updateStatus("설정값이 누락되었습니다", "bg-rose-600");
-                    return;
-                }
-
-                updateStatus("Firebase 초기화 중...", "bg-blue-500");
                 const app = initializeApp(firebaseConfig);
                 const auth = getAuth(app);
                 state.db = getFirestore(app);
 
-                updateStatus("익명 로그인 시도 중...", "bg-blue-600");
-                
-                // 에러 핸들링을 위한 인증 시도
-                try {
-                    await signInAnonymously(auth);
-                } catch (authError) {
-                    console.error("Auth Error:", authError);
-                    updateStatus("익명 로그인 비활성 상태 (콘솔 확인 필요)", "bg-rose-700");
-                    return;
-                }
+                updateStatus("Authenticating...", "bg-blue-600");
+                await signInAnonymously(auth);
 
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         state.user = user;
-                        updateStatus("WDGHP 클라우드 연결됨", "bg-green-600");
+                        document.getElementById('user-id-display').innerText = `Guest#${user.uid.substring(0,4)}`;
+                        updateStatus("WDGHP Cloud Synchronized", "bg-green-600");
                         startSync();
                     }
                 });
             } catch (e) {
-                console.error("Init Error:", e);
-                updateStatus("연결 실패: " + e.message.substring(0, 20), "bg-rose-600");
+                console.error(e);
+                updateStatus("Connection Failure", "bg-rose-600");
             }
         }
 
@@ -294,56 +359,71 @@
             const publicPath = (col) => collection(db, 'artifacts', appId, 'public', 'data', col);
             const configDoc = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main');
 
-            // Listen: Players
+            // Listeners
             onSnapshot(publicPath('players'), (snap) => {
                 if (snap.empty) {
-                    updateStatus("초기 데이터 생성 중...", "bg-amber-600");
-                    DEFAULT_PLAYERS.forEach(async p => {
-                        try { await setDoc(doc(publicPath('players'), p.id), p); } catch(e) {}
-                    });
+                    DEFAULT_PLAYERS.forEach(p => setDoc(doc(publicPath('players'), p.id), p));
                 } else {
                     state.players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     render();
                 }
-            }, (err) => {
-                console.error("Firestore Rule Error:", err);
-                updateStatus("보안 규칙 거부됨 (Rules 확인)", "bg-rose-700");
             });
 
-            // Listen: Sponsors
             onSnapshot(publicPath('sponsors'), (snap) => {
                 state.sponsors = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.createdAt - a.createdAt);
                 render();
             });
 
-            // Listen: Notice
+            onSnapshot(publicPath('messages'), (snap) => {
+                state.messages = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.createdAt - b.createdAt);
+                render();
+            });
+
             onSnapshot(configDoc, (snap) => {
                 if (snap.exists()) {
                     state.notice = snap.data().notice;
                     render();
                 } else {
-                    setDoc(configDoc, { notice: state.notice }).catch(e => {});
+                    setDoc(configDoc, { notice: state.notice });
                 }
             });
         }
 
-        // --- INTERACTION ---
+        // --- ACTIONS ---
         const getRef = (col, id) => doc(state.db, 'artifacts', state.appId, 'public', 'data', col, id);
 
+        window.sendChatMessage = async () => {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text || !state.user) return;
+            
+            try {
+                await addDoc(collection(state.db, 'artifacts', state.appId, 'public', 'data', 'messages'), {
+                    uid: state.user.uid,
+                    name: `Guest#${state.user.uid.substring(0,4)}`,
+                    text: text,
+                    createdAt: Date.now()
+                });
+                input.value = '';
+            } catch (e) {
+                console.error("Chat error", e);
+            }
+        };
+
+        document.getElementById('chat-input')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChatMessage();
+        });
+
         window.setTeam = async (id, team) => {
-            if (!state.isAdmin) return openModal({ msg: '관리자 로그인이 필요합니다.' });
+            if (!state.isAdmin) return openModal({ msg: '관리자 인증이 필요합니다.' });
             const p = state.players.find(x => x.id === id);
             const nextTeam = p.t === team ? 'none' : team;
-            try { 
-                await updateDoc(getRef('players', id), { t: nextTeam }); 
-            } catch (e) {
-                openModal({ msg: '수정 권한이 없습니다.' });
-            }
+            await updateDoc(getRef('players', id), { t: nextTeam }); 
         };
 
         window.editHandicap = (id) => {
             const p = state.players.find(x => x.id === id);
-            openModal({ title: '수정', msg: `${p.name} 핸디캡:`, input: true, onOk: async (v) => {
+            openModal({ title: '핸디 조정', msg: `${p.name}님의 새로운 핸디:`, input: true, onOk: async (v) => {
                 const h = parseFloat(v);
                 if (!isNaN(h)) await updateDoc(getRef('players', id), { h });
             }});
@@ -351,7 +431,7 @@
 
         window.editNotice = () => {
             if (!state.isAdmin) return;
-            openModal({ title: '공지 수정', msg: '공지 입력:', input: true, onOk: async (v) => {
+            openModal({ title: '공지 수정', msg: '메인 공지 입력:', input: true, onOk: async (v) => {
                 if (v) await updateDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'config', 'main'), { notice: v });
             }});
         };
@@ -360,10 +440,12 @@
             const user = document.getElementById('spon-name').value;
             const item = document.getElementById('spon-item').value;
             if (user && item) {
-                const s = { id: `s-${Date.now()}`, user, item, createdAt: Date.now() };
-                await setDoc(getRef('sponsors', s.id), s);
+                await addDoc(collection(state.db, 'artifacts', state.appId, 'public', 'data', 'sponsors'), {
+                    user, item, createdAt: Date.now()
+                });
                 document.getElementById('spon-name').value = '';
                 document.getElementById('spon-item').value = '';
+                openModal({ msg: '기증해주셔서 감사합니다!' });
             }
         };
 
@@ -374,14 +456,15 @@
         window.changeView = (v) => {
             document.querySelectorAll('.view-section').forEach(s => s.classList.toggle('active', s.id === `view-${v}`));
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === `nav-${v}`));
+            window.scrollTo(0, 0);
         };
 
         window.toggleAdmin = () => {
             if (state.isAdmin) { state.isAdmin = false; render(); }
             else {
-                openModal({ title: '관리자', msg: '비번 입력', input: true, isPass: true, onOk: (v) => {
+                openModal({ title: 'Admin Mode', msg: '비밀번호 입력:', input: true, isPass: true, onOk: (v) => {
                     if (v === '0101') { state.isAdmin = true; render(); }
-                    else { openModal({ msg: '틀렸습니다.' }); }
+                    else { openModal({ msg: '비밀번호가 틀렸습니다.' }); }
                 }});
             }
         };
